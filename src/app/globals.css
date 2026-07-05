@@ -118,6 +118,20 @@ body {
 .anim-blink {
   animation: blink 1.2s infinite;
 }
+@keyframes alarm-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.35);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 22px rgba(255, 255, 255, 0);
+  }
+}
+.anim-alarm-pulse {
+  animation: alarm-pulse 1.2s ease-in-out infinite;
+}
 
 /* Markdown ringkas di bubble chat AI */
 .chat-md p {

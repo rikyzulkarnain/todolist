@@ -14,7 +14,15 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
   Tap kartu → **sheet detail**: edit judul/catatan, pindah Life Area, prioritas,
   ubah tanggal & waktu, **subtask** (checklist), **tag** (many-to-many), **ulang**
   (harian/mingguan/bulanan — kemunculan berikutnya dibuat otomatis saat selesai),
-  dan hapus.
+  **pengingat** (Tidak / Notifikasi / Alarm), dan hapus. FAB tambah tugas juga
+  punya **input suara** (dikte judul via transkrip Gemini) + waktu & pengingat.
+- **Pengingat (PWA)** — service worker + penjadwal *foreground*: saat `due_time`
+  tiba, task tipe **Notifikasi** memunculkan notifikasi sistem, task tipe
+  **Alarm** memicu **layar penuh berbunyi** (Web Audio + getar) sampai
+  di-*acknowledge* (Selesai / Tunda 5m / Matikan) — fallback web sesuai §11 PRD.
+  Notifikasi diaktifkan dari onboarding atau kartu di Profil. *(Notifikasi saat
+  app tertutup total butuh web push server/VAPID — handler `push` sudah disiapkan
+  di `public/sw.js` untuk pengembangan berikutnya.)*
 - **Kalender** — strip 7 hari + tampilan Harian & Mingguan.
 - **Asisten AI (Gemini)** — chat berbahasa Indonesia dengan *function calling*:
   - `propose_agenda` → kartu **"Agenda prioritasmu hari ini"** ("Saya bingung hari ini")
@@ -31,24 +39,25 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 
 1. `npm install`
 2. Salin `.env.example` → `.env.local`, isi kredensial Supabase + Gemini.
-3. Jalankan migrations `src/migrations/001–007` di Supabase SQL Editor
+3. Jalankan migrations `src/migrations/001–008` di Supabase SQL Editor
    (lihat `src/migrations/README.md`, termasuk setup magic link & Google OAuth).
 4. `npm run dev`
 
 ## Struktur
 
 ```
+public/            # sw.js (service worker notifikasi), manifest.webmanifest, icon.svg
 src/
 ├── app/            # App Router: (auth)/login, (onboarding), (app)/(tabs)/{home,calendar,ai,tasks,profile}
-├── components/common/  # bottom-nav, add-task-sheet (FAB), task-card, dst.
+├── components/common/  # bottom-nav, add-task-sheet (FAB), task-card, task-detail-sheet, reminder-scheduler, alarm-overlay, dst.
 ├── config/         # akses process.env terpusat
 ├── constants/      # life area, prioritas, model AI
-├── features/       # server actions per domain: auth, tasks, assistant (AI), ...
+├── features/       # server actions per domain: auth, tasks, tags, assistant (AI), ...
 ├── hooks/          # use-audio-recorder, use-online
-├── lib/supabase/   # client, server, auth, proxy (middleware)
+├── lib/            # supabase (client/server/auth/proxy), notifications (SW + izin)
 ├── migrations/     # SQL Supabase (RLS default-deny)
 ├── providers/      # react-query
-├── stores/         # zustand (bottom sheet)
+├── stores/         # zustand (sheet, task-detail, alarm)
 ├── types/          # *.d.ts
 └── validations/    # zod
 ```

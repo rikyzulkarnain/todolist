@@ -2,9 +2,14 @@
 
 import { signOutAction } from "@/features/auth/action";
 import { QuotaInfo } from "@/features/profile/action";
+import {
+  ensureNotificationPermission,
+  permissionState,
+  registerServiceWorker,
+} from "@/lib/notifications";
 import { Profile } from "@/types/profile";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export default function ProfileView({
@@ -16,13 +21,33 @@ export default function ProfileView({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [perm, setPerm] = useState<NotificationPermission | "unsupported">(
+    "default",
+  );
 
   const name = profile.name ?? "Pengguna";
   const initial = name.charAt(0).toUpperCase();
   const quotaPct = Math.min(100, Math.round((quota.used / quota.limit) * 100));
 
+  useEffect(() => {
+    setPerm(permissionState());
+    registerServiceWorker();
+  }, []);
+
+  async function enableNotifications() {
+    const ok = await ensureNotificationPermission();
+    setPerm(permissionState());
+    if (ok) {
+      await registerServiceWorker();
+      toast.success("Notifikasi aktif — reminder task akan muncul tepat waktu");
+    } else {
+      toast.error(
+        "Izin notifikasi ditolak. Aktifkan lewat pengaturan situs di browser.",
+      );
+    }
+  }
+
   const menuRows = [
-    { label: "Notifikasi & jam tenang", value: "Aktif" },
     { label: "Jam produktif", value: profile.productive_time ?? "-" },
     { label: "Bahasa", value: "Indonesia" },
     { label: "Privasi & data", value: "" },
@@ -83,6 +108,45 @@ export default function ProfileView({
         <div className="text-mute-2 mt-2 text-[11.5px]">
           Kuota di-reset setiap pukul 00.00
         </div>
+      </div>
+
+      {/* notifikasi */}
+      <div className="border-line flex items-center gap-3 rounded-[18px] border bg-white px-[18px] py-4">
+        <div className="bg-mint flex h-10 w-10 flex-none items-center justify-center rounded-xl">
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#0F766E"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-ink-2 text-sm font-bold">Notifikasi reminder</div>
+          <div className="text-mute mt-px text-[12px]">
+            {perm === "granted"
+              ? "Aktif — reminder task muncul tepat waktu"
+              : perm === "denied"
+                ? "Diblokir — aktifkan lewat pengaturan browser"
+                : perm === "unsupported"
+                  ? "Browser ini tidak mendukung notifikasi"
+                  : "Izinkan agar reminder bisa berbunyi"}
+          </div>
+        </div>
+        {perm !== "granted" && perm !== "unsupported" && (
+          <button
+            onClick={enableNotifications}
+            className="bg-teal hover:bg-teal-deep h-9 flex-none rounded-[10px] px-3.5 text-[12.5px] font-bold text-white transition"
+          >
+            Aktifkan
+          </button>
+        )}
       </div>
 
       {/* upgrade */}

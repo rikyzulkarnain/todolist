@@ -14,6 +14,9 @@ export type TaskStatus = "todo" | "done";
 // RRULE ringkas untuk task berulang (§9.2 PRD). null = sekali jalan.
 export type RepeatRule = "FREQ=DAILY" | "FREQ=WEEKLY" | "FREQ=MONTHLY";
 
+// Jenis pengingat saat due_time tiba (§9.4/§11 PRD).
+export type ReminderType = "none" | "push" | "alarm";
+
 export type Task = {
   id: string;
   user_id: string;
@@ -26,6 +29,7 @@ export type Task = {
   due_date: string | null; // yyyy-MM-dd
   due_time: string | null; // HH:mm
   repeat_rule: RepeatRule | null;
+  reminder: ReminderType;
   status: TaskStatus;
   completed_at: string | null;
   source: "manual" | "voice" | "ocr" | "ai";

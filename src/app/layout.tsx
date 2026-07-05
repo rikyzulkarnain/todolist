@@ -16,6 +16,16 @@ export const metadata: Metadata = {
   title: "AI Life OS — Selalu tahu apa yang harus dikerjakan",
   description:
     "Personal operating system: task, kalender, reminder, dan AI yang memahami tujuan serta kebiasaanmu.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "AI Life OS",
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export const viewport: Viewport = {

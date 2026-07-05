@@ -6,11 +6,14 @@ import {
   LIFE_AREAS,
 } from "@/constants/life-area-constant";
 import { PRIORITIES, PRIORITY_KEYS } from "@/constants/priority-constant";
+import { transcribeAudio } from "@/features/ai/transcribe";
 import { addTask } from "@/features/tasks/action";
+import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { useOnline } from "@/hooks/use-online";
+import { ensureNotificationPermission } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { useSheetStore } from "@/stores/sheet-store";
-import { LifeArea, Priority } from "@/types/task";
+import { LifeArea, Priority, ReminderType } from "@/types/task";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -39,9 +42,33 @@ export default function AddTaskSheet() {
   const [area, setArea] = useState<LifeArea>("Karier");
   const [priority, setPriority] = useState<Priority>("sedang");
   const [dayOffset, setDayOffset] = useState(0);
+  const [time, setTime] = useState("");
+  const [reminder, setReminder] = useState<ReminderType>("push");
   const [busy, setBusy] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+
+  const { recording, toggle: toggleVoice } = useAudioRecorder({
+    onRecorded: async (audio) => {
+      setTranscribing(true);
+      try {
+        const res = await transcribeAudio(audio);
+        if (res.error || !res.text) {
+          toast.error(res.error ?? "Suara tidak terdengar. Coba lagi ya.");
+          return;
+        }
+        setTitle((prev) => (prev ? `${prev} ${res.text}` : res.text!));
+      } finally {
+        setTranscribing(false);
+      }
+    },
+  });
 
   const showFab = FAB_ROUTES.some((r) => pathname.startsWith(r)) && !open;
+
+  async function pickReminder(value: ReminderType) {
+    setReminder(value);
+    if (value !== "none") await ensureNotificationPermission();
+  }
 
   async function save() {
     const clean = title.trim();
@@ -57,6 +84,8 @@ export default function AddTaskSheet() {
         lifeArea: area,
         priority,
         dayOffset,
+        time: time || undefined,
+        reminder: time ? reminder : "none",
       });
       if (res.error) {
         toast.error(
@@ -67,6 +96,7 @@ export default function AddTaskSheet() {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       closeSheet();
       setTitle("");
+      setTime("");
       toast.success("Tugas ditambahkan");
     } finally {
       setBusy(false);
@@ -106,13 +136,49 @@ export default function AddTaskSheet() {
             <div className="text-ink mb-3.5 text-[17px] font-extrabold">
               Tambah tugas
             </div>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && save()}
-              placeholder="Apa yang perlu dikerjakan?"
-              className="border-line-2 bg-soft text-ink-2 focus:border-teal h-[50px] w-full rounded-[14px] border-[1.5px] px-4 text-[15px] outline-none focus:bg-white"
-            />
+            <div className="flex gap-2">
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && save()}
+                placeholder={
+                  transcribing ? "Mendengarkan…" : "Apa yang perlu dikerjakan?"
+                }
+                className="border-line-2 bg-soft text-ink-2 focus:border-teal h-[50px] min-w-0 flex-1 rounded-[14px] border-[1.5px] px-4 text-[15px] outline-none focus:bg-white"
+              />
+              <button
+                onClick={toggleVoice}
+                disabled={busy || transcribing}
+                aria-label={recording ? "Berhenti merekam" : "Isi dengan suara"}
+                className={cn(
+                  "flex h-[50px] w-[50px] flex-none items-center justify-center rounded-[14px] border-[1.5px] transition disabled:opacity-50",
+                  recording
+                    ? "border-red-500 bg-red-500 text-white"
+                    : "border-line-2 text-teal hover:bg-mint-3 bg-white",
+                )}
+              >
+                {recording ? (
+                  <div className="h-3.5 w-3.5 rounded-[3px] bg-white" />
+                ) : transcribing ? (
+                  <div className="border-teal h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" />
+                ) : (
+                  <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <path d="M12 19v4" />
+                  </svg>
+                )}
+              </button>
+            </div>
 
             <div className="text-slate mt-4 mb-2 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
               Life Area
@@ -183,6 +249,51 @@ export default function AddTaskSheet() {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="mt-4 flex items-start gap-4">
+              <div>
+                <div className="text-slate mb-2 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
+                  Waktu
+                </div>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="border-line-2 bg-soft text-ink-2 focus:border-teal h-8 rounded-2xl border-[1.5px] px-3 text-xs font-bold outline-none focus:bg-white"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-slate mb-2 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
+                  Pengingat
+                </div>
+                <div className="flex gap-[7px]">
+                  {(["none", "push", "alarm"] as ReminderType[]).map((r) => {
+                    const sel = reminder === r;
+                    const label =
+                      r === "none"
+                        ? "Tidak"
+                        : r === "push"
+                          ? "Notifikasi"
+                          : "Alarm";
+                    return (
+                      <button
+                        key={r}
+                        onClick={() => pickReminder(r)}
+                        disabled={!time}
+                        className={cn(
+                          "h-8 rounded-2xl border-[1.5px] px-3 text-xs font-bold transition-all duration-100 disabled:opacity-40",
+                          sel
+                            ? "border-teal bg-mint-2 text-teal"
+                            : "border-line-2 text-slate-2 bg-white",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <button

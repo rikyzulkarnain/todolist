@@ -1,6 +1,8 @@
 import AddTaskSheet from "@/components/common/add-task-sheet";
+import AlarmOverlay from "@/components/common/alarm-overlay";
 import BottomNav from "@/components/common/bottom-nav";
 import OfflineBanner from "@/components/common/offline-banner";
+import ReminderScheduler from "@/components/common/reminder-scheduler";
 import TaskDetailSheet from "@/components/common/task-detail-sheet";
 
 export default function TabsLayout({
@@ -14,6 +16,8 @@ export default function TabsLayout({
       <div className="flex flex-1 flex-col overflow-auto">{children}</div>
       <AddTaskSheet />
       <TaskDetailSheet />
+      <ReminderScheduler />
+      <AlarmOverlay />
       <BottomNav />
     </>
   );

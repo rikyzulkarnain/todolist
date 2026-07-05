@@ -2,7 +2,14 @@
 
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
-import { LifeArea, Priority, RepeatRule, Tag, Task } from "@/types/task";
+import {
+  LifeArea,
+  Priority,
+  ReminderType,
+  RepeatRule,
+  Tag,
+  Task,
+} from "@/types/task";
 import { addDays, addMonths, format, parseISO } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { generateTaskEmbedding } from "../ai/embedding";
@@ -71,6 +78,7 @@ export type AddTaskInput = {
   time?: string;
   source?: Task["source"];
   repeatRule?: RepeatRule | null;
+  reminder?: ReminderType;
 };
 
 export async function addTask(
@@ -104,6 +112,7 @@ export async function addTask(
       due_date,
       due_time,
       repeat_rule: input.repeatRule ?? null,
+      reminder: input.reminder ?? "push",
       source: input.source ?? "manual",
       ...(embedding ? { embedding } : {}),
     })
@@ -124,6 +133,7 @@ export type UpdateTaskInput = {
   time?: string | null;
   notes?: string | null;
   repeatRule?: RepeatRule | null;
+  reminder?: ReminderType;
 };
 
 /** Edit penuh sebuah task (judul, life area, prioritas, tanggal, waktu, dst). */
@@ -159,6 +169,7 @@ export async function updateTask(
       due_time,
       notes: input.notes ?? null,
       repeat_rule: input.repeatRule ?? null,
+      ...(input.reminder ? { reminder: input.reminder } : {}),
       ...(embedding ? { embedding } : {}),
     })
     .eq("id", input.id)

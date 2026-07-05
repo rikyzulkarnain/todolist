@@ -14,9 +14,16 @@ import {
   updateTask,
 } from "@/features/tasks/action";
 import { getTags, setTaskTags } from "@/features/tags/action";
+import { ensureNotificationPermission } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { useTaskDetailStore } from "@/stores/task-detail-store";
-import { LifeArea, Priority, RepeatRule, Task } from "@/types/task";
+import {
+  LifeArea,
+  Priority,
+  ReminderType,
+  RepeatRule,
+  Task,
+} from "@/types/task";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -26,6 +33,12 @@ const REPEAT_OPTIONS: { value: RepeatRule | ""; name: string }[] = [
   { value: "FREQ=DAILY", name: "Harian" },
   { value: "FREQ=WEEKLY", name: "Mingguan" },
   { value: "FREQ=MONTHLY", name: "Bulanan" },
+];
+
+const REMINDER_OPTIONS: { value: ReminderType; name: string }[] = [
+  { value: "none", name: "Tidak" },
+  { value: "push", name: "Notifikasi" },
+  { value: "alarm", name: "Alarm" },
 ];
 
 export default function TaskDetailSheet() {
@@ -55,6 +68,7 @@ export default function TaskDetailSheet() {
   const [dueDate, setDueDate] = useState<string>("");
   const [time, setTime] = useState<string>("");
   const [repeat, setRepeat] = useState<RepeatRule | "">("");
+  const [reminder, setReminder] = useState<ReminderType>("push");
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -70,6 +84,7 @@ export default function TaskDetailSheet() {
     setDueDate(opened.due_date ?? "");
     setTime(opened.due_time ?? "");
     setRepeat(opened.repeat_rule ?? "");
+    setReminder(opened.reminder ?? "push");
     setNotes(opened.notes ?? "");
     setTags((opened.tags ?? []).map((t) => t.name));
     setTagInput("");
@@ -86,6 +101,17 @@ export default function TaskDetailSheet() {
     if (!clean) return;
     if (!tags.includes(clean)) setTags([...tags, clean]);
     setTagInput("");
+  }
+
+  async function pickReminder(value: ReminderType) {
+    setReminder(value);
+    // Minta izin notifikasi saat pertama memilih push/alarm (butuh gestur user).
+    if (value !== "none") {
+      const ok = await ensureNotificationPermission();
+      if (!ok && value === "push") {
+        toast("Izin notifikasi belum aktif — alarm layar penuh tetap berbunyi.");
+      }
+    }
   }
 
   async function onSave() {
@@ -106,6 +132,7 @@ export default function TaskDetailSheet() {
         time: time || null,
         notes: notes || null,
         repeatRule: repeat || null,
+        reminder,
       });
       if (res.error) {
         toast.error(res.error);
@@ -281,6 +308,32 @@ export default function TaskDetailSheet() {
             );
           })}
         </div>
+
+        <SectionLabel>Pengingat</SectionLabel>
+        <div className="flex gap-[7px]">
+          {REMINDER_OPTIONS.map((o) => {
+            const sel = reminder === o.value;
+            return (
+              <button
+                key={o.value}
+                onClick={() => pickReminder(o.value)}
+                className={cn(
+                  "h-8 rounded-2xl border-[1.5px] px-3 text-xs font-bold transition-all duration-100",
+                  sel
+                    ? "border-teal bg-mint-2 text-teal"
+                    : "border-line-2 text-slate-2 bg-white",
+                )}
+              >
+                {o.name}
+              </button>
+            );
+          })}
+        </div>
+        {reminder !== "none" && !time && (
+          <div className="text-mute-2 mt-1.5 text-[11.5px] font-semibold">
+            Isi waktu di atas agar pengingat bisa berbunyi.
+          </div>
+        )}
 
         <SectionLabel>Tag</SectionLabel>
         <div className="flex flex-wrap gap-[7px]">

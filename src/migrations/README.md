@@ -1,6 +1,6 @@
 # Migrations
 
-Jalankan berurutan (001 → 007) di Supabase SQL Editor:
+Jalankan berurutan (001 → 008) di Supabase SQL Editor:
 
 1. `001-extensions.sql` — uuid + pgvector
 2. `002-auth-profiles.sql` — profil + trigger signup
@@ -15,6 +15,9 @@ Jalankan berurutan (001 → 007) di Supabase SQL Editor:
    (fungsi melewati baris `embedding IS NULL`).
 7. `007-tags.sql` — tabel `tags` + `task_tags` (many-to-many) untuk fitur tag
    pada task management MVP (§9.2 PRD), dengan RLS default-deny.
+8. `008-reminders.sql` — kolom `tasks.reminder` (`none|push|alarm`) untuk jenis
+   pengingat (§9.4/§11 PRD). Default `push` sehingga task berwaktu yang sudah
+   ada langsung mengingatkan.
 
 Semua tabel memakai Row-Level Security dengan kebijakan *default deny* —
 pengguna hanya bisa membaca/menulis baris miliknya sendiri.
