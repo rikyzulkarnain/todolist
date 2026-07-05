@@ -7,6 +7,7 @@ import {
 } from "@/constants/life-area-constant";
 import { PRIORITIES } from "@/constants/priority-constant";
 import { cn } from "@/lib/utils";
+import { useTaskDetailStore } from "@/stores/task-detail-store";
 import { Task } from "@/types/task";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 
@@ -33,14 +34,20 @@ export default function TaskCard({
   task: Task;
   onToggle: (id: string) => void;
 }) {
+  const openTask = useTaskDetailStore((s) => s.openTask);
   const done = task.status === "done";
   const c = areaColor(task.life_area);
   const pr = PRIORITIES[task.priority];
+  const subtasks = task.subtasks ?? [];
+  const doneSub = subtasks.filter((s) => s.status === "done").length;
 
   return (
     <div className="border-line flex items-start gap-3 rounded-2xl border bg-white px-3.5 py-[13px]">
       <TaskCheck done={done} onToggle={() => onToggle(task.id)} />
-      <div className="min-w-0 flex-1">
+      <button
+        onClick={() => openTask(task)}
+        className="min-w-0 flex-1 text-left"
+      >
         <div
           className={cn(
             "text-ink-2 text-sm leading-[1.35] font-bold",
@@ -65,8 +72,56 @@ export default function TaskCard({
           <span className="text-mute-2 text-[11px] font-semibold">
             {dueLabel(task)}
           </span>
+          {task.repeat_rule && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#8AA09C"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-label="Berulang"
+            >
+              <path d="M17 2l4 4-4 4" />
+              <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+              <path d="M7 22l-4-4 4-4" />
+              <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+            </svg>
+          )}
+          {subtasks.length > 0 && (
+            <span className="text-mute-2 flex items-center gap-1 text-[10.5px] font-bold">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              {doneSub}/{subtasks.length}
+            </span>
+          )}
         </div>
-      </div>
+        {(task.tags?.length ?? 0) > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {task.tags!.map((t) => (
+              <span
+                key={t.id}
+                className="text-mute bg-soft rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+              >
+                #{t.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </button>
     </div>
   );
 }

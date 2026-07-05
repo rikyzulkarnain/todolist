@@ -11,6 +11,10 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 - **Home** — greeting, kartu **Fokus Hari Ini** (top-3 + progress), jadwal hari
   ini, reminder in-app (Selesai / Snooze 15m / Jadwalkan ulang).
 - **Tugas** — kelompok per Life Area / Prioritas / Jatuh tempo, checkbox, chip warna.
+  Tap kartu → **sheet detail**: edit judul/catatan, pindah Life Area, prioritas,
+  ubah tanggal & waktu, **subtask** (checklist), **tag** (many-to-many), **ulang**
+  (harian/mingguan/bulanan — kemunculan berikutnya dibuat otomatis saat selesai),
+  dan hapus.
 - **Kalender** — strip 7 hari + tampilan Harian & Mingguan.
 - **Asisten AI (Gemini)** — chat berbahasa Indonesia dengan *function calling*:
   - `propose_agenda` → kartu **"Agenda prioritasmu hari ini"** ("Saya bingung hari ini")
@@ -27,7 +31,7 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 
 1. `npm install`
 2. Salin `.env.example` → `.env.local`, isi kredensial Supabase + Gemini.
-3. Jalankan migrations `src/migrations/001–005` di Supabase SQL Editor
+3. Jalankan migrations `src/migrations/001–007` di Supabase SQL Editor
    (lihat `src/migrations/README.md`, termasuk setup magic link & Google OAuth).
 4. `npm run dev`
 
