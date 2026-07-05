@@ -360,7 +360,8 @@ export async function assistantChat(input: {
       text: "(Foto) Ekstrak semua hal yang bisa jadi task dari gambar ini, lalu catat.",
     });
 
-  const ctx = await getAssistantContext();
+  // Teks (termasuk hasil transkrip suara) dipakai sebagai query RAG memori.
+  const ctx = await getAssistantContext(text);
   const systemInstruction = buildAssistantSystemInstruction(ctx);
   const model = input.model ?? DEFAULT_ASSISTANT_MODEL;
 

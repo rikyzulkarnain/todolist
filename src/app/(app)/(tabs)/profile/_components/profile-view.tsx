@@ -50,7 +50,8 @@ export default function ProfileView({
     }
   }
 
-  const menuRows = [
+  const menuRows: { label: string; value: string; href?: string }[] = [
+    { label: "Goals & milestone", value: "", href: "/goals" },
     { label: "Jam produktif", value: profile.productive_time ?? "-" },
     { label: "Bahasa", value: "Indonesia" },
     { label: "Privasi & data", value: "" },
@@ -173,7 +174,9 @@ export default function ProfileView({
           <button
             key={r.label}
             onClick={() =>
-              toast(`Layar "${r.label}" — segera hadir setelah MVP`)
+              r.href
+                ? router.push(r.href)
+                : toast(`Layar "${r.label}" — segera hadir setelah MVP`)
             }
             className="border-line-soft hover:bg-soft flex min-h-[52px] w-full items-center gap-3 border-b bg-white px-[18px] text-left last:border-b-0"
           >

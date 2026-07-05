@@ -31,7 +31,19 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
   sheet detail.
 - **Refleksi harian** — mood 1–5 + catatan (1 per hari), dari kartu di Home.
 - **Tinjauan mingguan** — statistik penyelesaian task, breakdown per Life Area,
-  hari produktif, mood rata-rata, dan insight *rule-based* (PRD §6.4).
+  hari produktif, mood rata-rata, insight *rule-based*, dan tombol **Insight AI**
+  (narasi Gemini on-demand, hemat kuota).
+- **Goals (Goal Tree)** — tujuan besar → **milestone** (nested), progress dari
+  task terkait (`tasks.goal_id`), tandai selesai/hapus. Task bisa dikaitkan ke
+  goal lewat sheet detail. Dari Profil → "Goals & milestone".
+- **Long-term memory (RAG)** — catatan refleksi disimpan sebagai embedding di
+  `ai_memory`; asisten AI mengambil top-k memori relevan (`match_ai_memory`)
+  untuk menjawab lebih personal (PRD §6.3).
+- **Proactive AI nudge** — Edge Function `proactive-nudge` (cron/jam) mengirim
+  dorongan kontekstual (deadline, overload, ajakan refleksi) dengan frequency
+  cap + jam tenang (PRD §6.5). Setup: `supabase/functions/proactive-nudge/`.
+- **Timezone per user** — `profiles.timezone` (dari browser) dipakai untuk
+  hitung "hari ini"/jam di server (review, konteks AI, nudge).
 - **Asisten AI (Gemini)** — chat berbahasa Indonesia dengan *function calling*:
   - `propose_agenda` → kartu **"Agenda prioritasmu hari ini"** ("Saya bingung hari ini")
   - `create_task` / `complete_task` / `delete_task` dari teks, **suara**
@@ -48,7 +60,7 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 1. `npm install`
 2. Salin `.env.example` → `.env.local`, isi kredensial Supabase + Gemini
    (VAPID opsional, hanya untuk Web Push server-side).
-3. Jalankan migrations `src/migrations/001–010` di Supabase SQL Editor
+3. Jalankan migrations `src/migrations/001–013` di Supabase SQL Editor
    (lihat `src/migrations/README.md`, termasuk setup magic link & Google OAuth).
 4. `npm run dev`
 
@@ -56,17 +68,17 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 
 ```
 public/            # sw.js (service worker notifikasi), manifest.webmanifest, icon.svg
-supabase/functions/send-reminders/  # Edge Function Web Push (VAPID + cron)
+supabase/functions/  # Edge Functions: send-reminders (Web Push), proactive-nudge
 src/
 ├── app/            # App Router: (auth)/login, (onboarding),
 │                   #   (app)/(tabs)/{home,calendar,ai,tasks,profile},
-│                   #   (app)/{reflection,review}
+│                   #   (app)/{reflection,review,goals}
 ├── components/common/  # bottom-nav, add-task-sheet (FAB), task-card, task-detail-sheet, reminder-scheduler, alarm-overlay, dst.
 ├── config/         # akses process.env terpusat
 ├── constants/      # life area, prioritas, model AI
-├── features/       # server actions per domain: auth, tasks, tags, reflection, review, push, assistant (AI), ...
+├── features/       # server actions per domain: auth, tasks, tags, goals, reflection, review, push, assistant (AI: chat/context/memory), ...
 ├── hooks/          # use-audio-recorder, use-online
-├── lib/            # supabase (client/server/auth/proxy), notifications, push (Web Push)
+├── lib/            # supabase (client/server/auth/proxy), notifications, push, time (tz)
 ├── migrations/     # SQL Supabase (RLS default-deny)
 ├── providers/      # react-query
 ├── stores/         # zustand (sheet, task-detail, alarm)

@@ -7,6 +7,7 @@ export type Profile = {
   avatar_url: string | null;
   plan: "free" | "pro";
   productive_time: ProductiveTime | null;
+  timezone: string | null;
   onboarding_completed: boolean;
   created_at: string;
 };

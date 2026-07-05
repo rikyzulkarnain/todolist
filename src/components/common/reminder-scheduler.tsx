@@ -1,5 +1,6 @@
 "use client";
 
+import { syncTimezone } from "@/features/profile/action";
 import { getTasks } from "@/features/tasks/action";
 import { registerServiceWorker, showTaskNotification } from "@/lib/notifications";
 import { subscribeToPush } from "@/lib/push";
@@ -40,6 +41,13 @@ export default function ReminderScheduler() {
     // Pastikan langganan Web Push tersimpan untuk user yang izinnya sudah aktif
     // (mis. sesi berikutnya) — agar reminder tetap terkirim saat app tertutup.
     subscribeToPush();
+    // Simpan timezone browser ke profil untuk perhitungan tanggal di server.
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) syncTimezone(tz);
+    } catch {
+      /* diabaikan */
+    }
   }, []);
 
   useEffect(() => {

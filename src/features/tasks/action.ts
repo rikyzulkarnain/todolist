@@ -134,6 +134,7 @@ export type UpdateTaskInput = {
   notes?: string | null;
   repeatRule?: RepeatRule | null;
   reminder?: ReminderType;
+  goalId?: string | null;
 };
 
 /** Edit penuh sebuah task (judul, life area, prioritas, tanggal, waktu, dst). */
@@ -170,6 +171,7 @@ export async function updateTask(
       notes: input.notes ?? null,
       repeat_rule: input.repeatRule ?? null,
       ...(input.reminder ? { reminder: input.reminder } : {}),
+      ...(input.goalId !== undefined ? { goal_id: input.goalId } : {}),
       ...(embedding ? { embedding } : {}),
     })
     .eq("id", input.id)

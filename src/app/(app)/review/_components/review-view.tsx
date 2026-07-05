@@ -1,14 +1,33 @@
 "use client";
 
 import { areaColor } from "@/constants/life-area-constant";
-import { WeeklyReview } from "@/features/review/action";
+import { generateReviewInsight, WeeklyReview } from "@/features/review/action";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 const MOOD_EMOJI = ["", "😞", "😕", "😐", "🙂", "😄"];
 
 export default function ReviewView({ review }: { review: WeeklyReview }) {
   const router = useRouter();
   const pct = Math.round(review.completionRate * 100);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [loadingAi, setLoadingAi] = useState(false);
+
+  async function askAi() {
+    if (loadingAi) return;
+    setLoadingAi(true);
+    try {
+      const res = await generateReviewInsight(review);
+      if (res.error || !res.text) {
+        toast.error(res.error ?? "Insight AI tidak tersedia.");
+        return;
+      }
+      setAiInsight(res.text);
+    } finally {
+      setLoadingAi(false);
+    }
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-auto px-5 pt-5 pb-8">
@@ -127,9 +146,61 @@ export default function ReviewView({ review }: { review: WeeklyReview }) {
         </>
       )}
 
-      {/* insight */}
+      {/* insight AI */}
+      <div className="mt-6">
+        {aiInsight ? (
+          <div className="rounded-[16px] border border-[#B9E6E0] bg-[#F0FAF8] p-4">
+            <div className="text-teal mb-1.5 flex items-center gap-1.5 text-[11.5px] font-extrabold tracking-[.4px] uppercase">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+              </svg>
+              Insight AI
+            </div>
+            <div className="text-ink-2 text-[13.5px] leading-[1.55]">
+              {aiInsight}
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={askAi}
+            disabled={loadingAi}
+            className="border-teal text-teal hover:bg-mint-3 flex h-12 w-full items-center justify-center gap-2 rounded-[14px] border-[1.5px] bg-white text-sm font-bold transition disabled:opacity-60"
+          >
+            {loadingAi ? (
+              "AI sedang menganalisis…"
+            ) : (
+              <>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+                </svg>
+                Minta insight AI
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* insight rule-based */}
       <div className="text-slate mt-6 mb-2.5 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
-        Insight
+        Ringkasan
       </div>
       <div className="flex flex-col gap-2">
         {review.insights.map((text, i) => (

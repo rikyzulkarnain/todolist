@@ -21,6 +21,13 @@ export function buildAssistantSystemInstruction(
   const tasks = ctx.tasks.length
     ? ctx.tasks.map((t) => taskLine(t, ctx.today)).join("\n")
     : "(belum ada task)";
+  const memories = ctx.memories.length
+    ? ctx.memories.map((m) => `- ${m}`).join("\n")
+    : "";
+
+  const memorySection = memories
+    ? `\n\nYang kamu ingat tentang pengguna (dari refleksi & interaksi lalu — pakai bila relevan, jangan diulang mentah):\n${memories}`
+    : "";
 
   return `Kamu adalah asisten AI di aplikasi "AI Life OS" — personal operating system berbahasa Indonesia.
 Misi utamamu: pengguna SELALU tahu apa yang harus dikerjakan sekarang, tanpa bingung.
@@ -34,7 +41,7 @@ Goal aktif pengguna:
 ${goals}
 
 Task pengguna (7 hari ke depan, pakai id untuk function call):
-${tasks}
+${tasks}${memorySection}
 
 Aturan:
 - Selalu balas dalam Bahasa Indonesia yang hangat, ringkas (1-3 kalimat), tanpa tabel/markdown rumit. Boleh 1 emoji.

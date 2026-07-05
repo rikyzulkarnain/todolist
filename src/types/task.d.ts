@@ -46,11 +46,23 @@ export type Tag = {
   name: string;
 };
 
+export type GoalStatus = "active" | "done" | "archived";
+
 export type Goal = {
   id: string;
   user_id: string;
+  parent_goal_id: string | null;
   title: string;
+  description: string | null;
   life_area: LifeArea | null;
-  status: "active" | "done" | "archived";
+  status: GoalStatus;
+  target_date: string | null;
   created_at: string;
+};
+
+/** Goal beserta milestone (anak) & progress task terkait — untuk Goal Tree. */
+export type GoalNode = Goal & {
+  children: GoalNode[];
+  taskDone: number;
+  taskTotal: number;
 };

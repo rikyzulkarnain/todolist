@@ -1,6 +1,6 @@
 # Migrations
 
-Jalankan berurutan (001 → 010) di Supabase SQL Editor:
+Jalankan berurutan (001 → 013) di Supabase SQL Editor:
 
 1. `001-extensions.sql` — uuid + pgvector
 2. `002-auth-profiles.sql` — profil + trigger signup
@@ -23,6 +23,12 @@ Jalankan berurutan (001 → 010) di Supabase SQL Editor:
 10. `010-push-subscriptions.sql` — tabel `push_subscriptions` + kolom
     `tasks.reminder_sent_at` untuk Web Push server-side. Setup lengkap ada di
     `supabase/functions/send-reminders/README.md`.
+11. `011-user-timezone.sql` — kolom `profiles.timezone` (IANA) untuk hitung
+    tanggal/jam di server per user (weekly review, konteks AI, nudge).
+12. `012-ai-memory-rpc.sql` — fungsi `match_ai_memory` (pgvector) untuk RAG
+    long-term memory (PRD §6.3).
+13. `013-proactive-nudges.sql` — tabel `ai_nudges` (frequency cap nudge proaktif,
+    PRD §6.5). Edge Function di `supabase/functions/proactive-nudge/README.md`.
 
 Semua tabel memakai Row-Level Security dengan kebijakan *default deny* —
 pengguna hanya bisa membaca/menulis baris miliknya sendiri.

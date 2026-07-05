@@ -1,10 +1,13 @@
 "use server";
 
+import { saveMemory } from "@/features/ai/memory";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Mood, Reflection } from "@/types/reflection";
 import { format, subDays } from "date-fns";
 import { revalidatePath } from "next/cache";
+
+const MOOD_LABEL = ["", "berat", "kurang", "biasa", "baik", "hebat"];
 
 const DATE_FMT = "yyyy-MM-dd";
 
@@ -67,6 +70,17 @@ export async function saveReflection(input: {
   );
 
   if (error) return { error: error.message };
+
+  // Simpan sebagai memori jangka panjang (RAG) bila ada catatan bermakna.
+  const note = input.note?.trim();
+  if (note) {
+    await saveMemory({
+      content: `Refleksi ${today}: mood ${MOOD_LABEL[input.mood]} (${input.mood}/5). ${note}`,
+      kind: "event",
+      sourceRef: `reflection:${today}`,
+    });
+  }
+
   revalidatePath("/home");
   revalidatePath("/reflection");
   revalidatePath("/review");

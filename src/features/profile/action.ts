@@ -21,6 +21,31 @@ export async function getProfile(): Promise<Profile | null> {
   return { ...data, email: data.email ?? user.email ?? null };
 }
 
+/** Simpan timezone IANA browser ke profil bila berbeda (dipanggil dari klien). */
+export async function syncTimezone(
+  timezone: string,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return {};
+  if (!timezone || timezone.length > 64) return {};
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .single<{ timezone: string | null }>();
+
+  if (data?.timezone === timezone) return {};
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ timezone })
+    .eq("id", user.id);
+  if (error) return { error: error.message };
+  return {};
+}
+
 export type QuotaInfo = { used: number; limit: number };
 
 /** Kuota AI harian = jumlah pesan user hari ini (reset otomatis tiap 00.00). */

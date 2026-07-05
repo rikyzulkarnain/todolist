@@ -13,6 +13,7 @@ import {
   toggleTask,
   updateTask,
 } from "@/features/tasks/action";
+import { getActiveGoals } from "@/features/goals/action";
 import { getTags, setTaskTags } from "@/features/tags/action";
 import { ensureNotificationPermission } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,12 @@ export default function TaskDetailSheet() {
     enabled: Boolean(opened),
   });
 
+  const { data: activeGoals = [] } = useQuery({
+    queryKey: ["active-goals"],
+    queryFn: () => getActiveGoals(),
+    enabled: Boolean(opened),
+  });
+
   const [title, setTitle] = useState("");
   const [area, setArea] = useState<LifeArea>("Karier");
   const [priority, setPriority] = useState<Priority>("sedang");
@@ -69,6 +76,7 @@ export default function TaskDetailSheet() {
   const [time, setTime] = useState<string>("");
   const [repeat, setRepeat] = useState<RepeatRule | "">("");
   const [reminder, setReminder] = useState<ReminderType>("push");
+  const [goalId, setGoalId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -85,6 +93,7 @@ export default function TaskDetailSheet() {
     setTime(opened.due_time ?? "");
     setRepeat(opened.repeat_rule ?? "");
     setReminder(opened.reminder ?? "push");
+    setGoalId(opened.goal_id ?? null);
     setNotes(opened.notes ?? "");
     setTags((opened.tags ?? []).map((t) => t.name));
     setTagInput("");
@@ -133,6 +142,7 @@ export default function TaskDetailSheet() {
         notes: notes || null,
         repeatRule: repeat || null,
         reminder,
+        goalId,
       });
       if (res.error) {
         toast.error(res.error);
@@ -333,6 +343,39 @@ export default function TaskDetailSheet() {
           <div className="text-mute-2 mt-1.5 text-[11.5px] font-semibold">
             Isi waktu di atas agar pengingat bisa berbunyi.
           </div>
+        )}
+
+        {activeGoals.length > 0 && (
+          <>
+            <SectionLabel>Goal terkait</SectionLabel>
+            <div className="relative">
+              <select
+                value={goalId ?? ""}
+                onChange={(e) => setGoalId(e.target.value || null)}
+                className="border-line-2 bg-soft text-ink-2 focus:border-teal h-11 w-full appearance-none rounded-xl border-[1.5px] px-3.5 pr-9 text-[13.5px] font-semibold outline-none focus:bg-white"
+              >
+                <option value="">Tidak terkait goal</option>
+                {activeGoals.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.title}
+                  </option>
+                ))}
+              </select>
+              <svg
+                className="text-mute pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </div>
+          </>
         )}
 
         <SectionLabel>Tag</SectionLabel>

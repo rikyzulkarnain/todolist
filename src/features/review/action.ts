@@ -1,11 +1,12 @@
 "use server";
 
+import { ASSISTANT_MODELS } from "@/constants/assistant-constant";
+import { createAI, isQuotaError } from "@/features/ai/instance";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
+import { daysAgoInTz, todayInTz } from "@/lib/time";
 import { LifeArea } from "@/types/task";
-import { format, parseISO, subDays } from "date-fns";
-
-const DATE_FMT = "yyyy-MM-dd";
+import { format, parseISO } from "date-fns";
 const DAY_LONG = [
   "Minggu",
   "Senin",
@@ -41,10 +42,17 @@ export async function getWeeklyReview(): Promise<WeeklyReview> {
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const today = new Date();
-  const start = subDays(today, 6);
-  const startStr = format(start, DATE_FMT);
-  const todayStr = format(today, DATE_FMT);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user?.id ?? "")
+    .maybeSingle<{ timezone: string | null }>();
+  const tz = profile?.timezone ?? undefined;
+
+  const todayStr = todayInTz(tz);
+  const startStr = daysAgoInTz(6, tz);
+  const start = parseISO(startStr);
+  const today = parseISO(todayStr);
   const rangeLabel = `${format(start, "d MMM")} – ${format(today, "d MMM")}`;
 
   const empty: WeeklyReview = {
@@ -132,6 +140,46 @@ export async function getWeeklyReview(): Promise<WeeklyReview> {
     reflectionDays: moods.length,
     insights,
   };
+}
+
+/**
+ * Insight naratif dari AI (Gemini) atas statistik minggu ini. Best-effort:
+ * dipanggil eksplisit dari tombol di layar review (tidak otomatis, agar hemat
+ * kuota). Fallback ke null bila gagal/kuota habis.
+ */
+export async function generateReviewInsight(
+  review: WeeklyReview,
+): Promise<{ text?: string; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sesi berakhir." };
+
+  const areaLines = review.byArea
+    .map((a) => `${a.area}: ${a.done}/${a.total}`)
+    .join(", ");
+  const prompt = `Kamu asisten AI di aplikasi produktivitas berbahasa Indonesia. Berdasarkan data minggu ini, tulis insight yang hangat, spesifik, dan memotivasi (2-3 kalimat, maksimal 1 emoji). Fokus pada 1 apresiasi + 1 saran konkret untuk minggu depan. Jangan pakai markdown atau bullet.
+
+Data minggu (${review.rangeLabel}):
+- Task selesai: ${review.done}/${review.total} (${Math.round(review.completionRate * 100)}%)
+- Per Life Area: ${areaLines || "-"}
+- Hari paling produktif: ${review.bestDay ?? "-"}
+- Mood rata-rata: ${review.avgMood ?? "-"}/5 (${review.reflectionDays}/7 hari refleksi)`;
+
+  const ai = createAI();
+  for (const model of ASSISTANT_MODELS) {
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: { temperature: 0.6 },
+      });
+      const text = (res.text ?? "").trim();
+      if (text) return { text };
+    } catch (error) {
+      if (isQuotaError(error)) continue;
+      return { error: "Gagal membuat insight AI." };
+    }
+  }
+  return { error: "Kuota AI harian habis. Coba lagi besok." };
 }
 
 /** Insight rule-based (PRD §6.4: mulai dari aturan atas data nyata). */
