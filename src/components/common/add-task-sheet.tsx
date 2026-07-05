@@ -1,0 +1,200 @@
+"use client";
+
+import {
+  alphaColor,
+  LIFE_AREA_NAMES,
+  LIFE_AREAS,
+} from "@/constants/life-area-constant";
+import { PRIORITIES, PRIORITY_KEYS } from "@/constants/priority-constant";
+import { addTask } from "@/features/tasks/action";
+import { useOnline } from "@/hooks/use-online";
+import { cn } from "@/lib/utils";
+import { useSheetStore } from "@/stores/sheet-store";
+import { LifeArea, Priority } from "@/types/task";
+import { useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+
+const DAY_OPTIONS: { value: number; name: string }[] = [
+  { value: 0, name: "Hari ini" },
+  { value: 1, name: "Besok" },
+  { value: 3, name: "Minggu ini" },
+];
+
+// FAB tampil hanya di Home & Tasks (mengikuti prototype).
+const FAB_ROUTES = ["/home", "/tasks"];
+
+/**
+ * FAB "+" dan bottom sheet "Tambah tugas". Sheet bisa dibuka dari mana saja
+ * lewat useSheetStore (empty state Home/Tasks/Calendar).
+ */
+export default function AddTaskSheet() {
+  const pathname = usePathname();
+  const online = useOnline();
+  const queryClient = useQueryClient();
+  const { open, openSheet, closeSheet } = useSheetStore();
+
+  const [title, setTitle] = useState("");
+  const [area, setArea] = useState<LifeArea>("Karier");
+  const [priority, setPriority] = useState<Priority>("sedang");
+  const [dayOffset, setDayOffset] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  const showFab = FAB_ROUTES.some((r) => pathname.startsWith(r)) && !open;
+
+  async function save() {
+    const clean = title.trim();
+    if (!clean) {
+      toast.error("Tulis judul tugas dulu");
+      return;
+    }
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await addTask({
+        title: clean,
+        lifeArea: area,
+        priority,
+        dayOffset,
+      });
+      if (res.error) {
+        toast.error(
+          online ? res.error : "Gagal sinkron — disimpan offline",
+        );
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      closeSheet();
+      setTitle("");
+      toast.success("Tugas ditambahkan");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {showFab && (
+        <button
+          onClick={openSheet}
+          aria-label="Tambah tugas"
+          className="bg-teal hover:bg-teal-deep absolute right-[18px] bottom-[86px] z-20 flex h-[54px] w-[54px] items-center justify-center rounded-[18px] shadow-[0_10px_24px_rgba(15,118,110,.4)] transition active:scale-[.94]"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      )}
+
+      {open && (
+        <>
+          <div
+            onClick={closeSheet}
+            className="absolute inset-0 z-50 bg-[rgba(9,40,37,.45)]"
+          />
+          <div className="anim-sheet-up absolute right-0 bottom-0 left-0 z-[51] rounded-t-3xl bg-white px-5 pt-3.5 pb-6">
+            <div className="bg-line-3 mx-auto mb-4 h-1 w-10 rounded-sm" />
+            <div className="text-ink mb-3.5 text-[17px] font-extrabold">
+              Tambah tugas
+            </div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && save()}
+              placeholder="Apa yang perlu dikerjakan?"
+              className="border-line-2 bg-soft text-ink-2 focus:border-teal h-[50px] w-full rounded-[14px] border-[1.5px] px-4 text-[15px] outline-none focus:bg-white"
+            />
+
+            <div className="text-slate mt-4 mb-2 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
+              Life Area
+            </div>
+            <div className="flex flex-wrap gap-[7px]">
+              {LIFE_AREA_NAMES.map((a) => {
+                const sel = area === a;
+                const c = LIFE_AREAS[a];
+                return (
+                  <button
+                    key={a}
+                    onClick={() => setArea(a)}
+                    className="h-8 rounded-2xl border-[1.5px] px-3 text-xs font-bold transition-all duration-100"
+                    style={{
+                      borderColor: sel ? c : "#D6E1DF",
+                      background: sel ? alphaColor(c, 0.14) : "#fff",
+                      color: sel ? c : "#5B7370",
+                    }}
+                  >
+                    {a}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="text-slate mt-4 mb-2 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
+              Prioritas
+            </div>
+            <div className="flex gap-[7px]">
+              {PRIORITY_KEYS.map((k) => {
+                const sel = priority === k;
+                const c = PRIORITIES[k].color;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setPriority(k)}
+                    className="h-8 rounded-2xl border-[1.5px] px-3 text-xs font-bold transition-all duration-100"
+                    style={{
+                      borderColor: sel ? c : "#D6E1DF",
+                      background: sel ? alphaColor(c, 0.12) : "#fff",
+                      color: sel ? c : "#5B7370",
+                    }}
+                  >
+                    {PRIORITIES[k].label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="text-slate mt-4 mb-2 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
+              Jatuh tempo
+            </div>
+            <div className="flex gap-[7px]">
+              {DAY_OPTIONS.map((d) => {
+                const sel = dayOffset === d.value;
+                return (
+                  <button
+                    key={d.value}
+                    onClick={() => setDayOffset(d.value)}
+                    className={cn(
+                      "h-8 rounded-2xl border-[1.5px] px-3 text-xs font-bold transition-all duration-100",
+                      sel
+                        ? "border-teal bg-mint-2 text-teal"
+                        : "border-line-2 text-slate-2 bg-white",
+                    )}
+                  >
+                    {d.name}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={save}
+              disabled={busy}
+              className="bg-teal hover:bg-teal-deep mt-5 h-[50px] w-full rounded-[14px] text-[15px] font-bold text-white transition disabled:opacity-60"
+            >
+              {busy ? "Menyimpan…" : "Simpan"}
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}

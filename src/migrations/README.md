@@ -1,0 +1,27 @@
+# Migrations
+
+Jalankan berurutan (001 → 006) di Supabase SQL Editor:
+
+1. `001-extensions.sql` — uuid + pgvector
+2. `002-auth-profiles.sql` — profil + trigger signup
+3. `003-goals.sql` — goal onboarding
+4. `004-tasks.sql` — task inti MVP
+5. `005-assistant.sql` — percakapan AI + ai_memory (RAG v2)
+6. `006-tasks-embeddings.sql` — kolom `tasks.embedding vector(768)` + fungsi
+   `match_tasks` untuk pencarian semantik (pola dari fina-app:
+   *Transactions Table with Vector Embeddings & RLS* + *Semantic Transaction
+   Matching Function*). Embedding dihitung otomatis saat task dibuat /
+   dijadwalkan ulang — task lama yang belum punya embedding tetap aman
+   (fungsi melewati baris `embedding IS NULL`).
+
+Semua tabel memakai Row-Level Security dengan kebijakan *default deny* —
+pengguna hanya bisa membaca/menulis baris miliknya sendiri.
+
+## Auth
+
+Aktifkan di Supabase Dashboard → Authentication:
+
+- **Email (magic link)** — Sign in with OTP.
+- **Google OAuth** — isi Client ID/Secret, tambahkan redirect
+  `https://<project>.supabase.co/auth/v1/callback`.
+- Tambahkan `http://localhost:3000/auth/callback` ke Redirect URLs.

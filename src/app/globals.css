@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+/* ===================== AI Life OS design tokens =====================
+   Diambil langsung dari prototype Claude Design (AI Life OS.dc.html). */
+@theme {
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+
+  /* permukaan */
+  --color-page: #e7edec;
+  --color-shell: #f5f8f7;
+  --color-surface: #ffffff;
+  --color-soft: #f8fbfa;
+  --color-seg: #e7eeec;
+  --color-skeleton: #e2eae8;
+
+  /* brand teal */
+  --color-teal: #0f766e;
+  --color-teal-deep: #0c6058;
+  --color-teal-dark: #0a5750;
+  --color-mint: #e0f0ee;
+  --color-mint-2: #e9f4f2;
+  --color-mint-3: #f0f7f6;
+  --color-aqua: #7bd8cd;
+  --color-aqua-2: #9bddd5;
+
+  /* teks */
+  --color-ink: #0b3b36;
+  --color-ink-2: #12332f;
+  --color-slate: #41615d;
+  --color-slate-2: #5b7370;
+  --color-mute: #7b9490;
+  --color-mute-2: #8aa09c;
+
+  /* garis & border */
+  --color-line: #e4eae9;
+  --color-line-2: #d6e1df;
+  --color-line-3: #dce5e3;
+  --color-line-4: #c9dcd9;
+  --color-line-soft: #f0f4f3;
+
+  /* lainnya */
+  --color-toastbg: #12332f;
+  --color-danger: #b4453e;
+  --color-danger-line: #ead5d5;
+}
+
+body {
+  margin: 0;
+  background: var(--color-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@keyframes slide-down {
+  from {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-fade-in {
+  animation: fade-in 0.3s ease;
+}
+.anim-slide-down {
+  animation: slide-down 0.3s ease;
+}
+.anim-sheet-up {
+  animation: sheet-up 0.28s cubic-bezier(0.3, 1, 0.4, 1);
+}
+.anim-pulse-soft {
+  animation: pulse-soft 1.4s ease infinite;
+}
+.anim-blink {
+  animation: blink 1.2s infinite;
+}
+
+/* Markdown ringkas di bubble chat AI */
+.chat-md p {
+  margin: 0 0 6px;
+}
+.chat-md p:last-child {
+  margin-bottom: 0;
+}
+.chat-md ul,
+.chat-md ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}

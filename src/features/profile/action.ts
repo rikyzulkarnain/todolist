@@ -1,0 +1,41 @@
+"use server";
+
+import { FREE_DAILY_QUOTA } from "@/constants/assistant-constant";
+import { getCurrentUser } from "@/lib/supabase/auth";
+import { createClient } from "@/lib/supabase/server";
+import { Profile } from "@/types/profile";
+import { format } from "date-fns";
+
+export async function getProfile(): Promise<Profile | null> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single<Profile>();
+
+  if (!data) return null;
+  return { ...data, email: data.email ?? user.email ?? null };
+}
+
+export type QuotaInfo = { used: number; limit: number };
+
+/** Kuota AI harian = jumlah pesan user hari ini (reset otomatis tiap 00.00). */
+export async function getQuota(): Promise<QuotaInfo> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { used: 0, limit: FREE_DAILY_QUOTA };
+
+  const startOfDay = `${format(new Date(), "yyyy-MM-dd")}T00:00:00`;
+  const { count } = await supabase
+    .from("chat_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("role", "user")
+    .gte("created_at", startOfDay);
+
+  return { used: count ?? 0, limit: FREE_DAILY_QUOTA };
+}
