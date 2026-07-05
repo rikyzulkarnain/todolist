@@ -26,5 +26,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "design-dari-file-prd"]
+  "exclude": ["node_modules", "design-dari-file-prd", "supabase/functions"]
 }

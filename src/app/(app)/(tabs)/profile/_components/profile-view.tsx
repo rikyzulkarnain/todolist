@@ -7,6 +7,7 @@ import {
   permissionState,
   registerServiceWorker,
 } from "@/lib/notifications";
+import { subscribeToPush } from "@/lib/push";
 import { Profile } from "@/types/profile";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -39,6 +40,8 @@ export default function ProfileView({
     setPerm(permissionState());
     if (ok) {
       await registerServiceWorker();
+      // Berlangganan Web Push (best-effort; hanya jika VAPID key dikonfigurasi).
+      await subscribeToPush();
       toast.success("Notifikasi aktif — reminder task akan muncul tepat waktu");
     } else {
       toast.error(

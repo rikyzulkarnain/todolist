@@ -354,6 +354,30 @@ export default function HomeView({
           </div>
         </>
       )}
+
+      {/* refleksi & tinjauan mingguan (v1.1) */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link
+          href="/reflection"
+          className="border-line hover:border-teal flex flex-col gap-1.5 rounded-2xl border bg-white px-4 py-3.5 transition"
+        >
+          <span className="text-xl">📝</span>
+          <span className="text-ink text-[13px] font-bold">Refleksi harian</span>
+          <span className="text-mute text-[11.5px] leading-tight">
+            Catat mood &amp; harimu
+          </span>
+        </Link>
+        <Link
+          href="/review"
+          className="border-line hover:border-teal flex flex-col gap-1.5 rounded-2xl border bg-white px-4 py-3.5 transition"
+        >
+          <span className="text-xl">📊</span>
+          <span className="text-ink text-[13px] font-bold">Tinjauan mingguan</span>
+          <span className="text-mute text-[11.5px] leading-tight">
+            Statistik &amp; insight
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }

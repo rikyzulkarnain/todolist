@@ -1,6 +1,6 @@
 # Migrations
 
-Jalankan berurutan (001 → 008) di Supabase SQL Editor:
+Jalankan berurutan (001 → 010) di Supabase SQL Editor:
 
 1. `001-extensions.sql` — uuid + pgvector
 2. `002-auth-profiles.sql` — profil + trigger signup
@@ -18,6 +18,11 @@ Jalankan berurutan (001 → 008) di Supabase SQL Editor:
 8. `008-reminders.sql` — kolom `tasks.reminder` (`none|push|alarm`) untuk jenis
    pengingat (§9.4/§11 PRD). Default `push` sehingga task berwaktu yang sudah
    ada langsung mengingatkan.
+9. `009-reflections.sql` — tabel `reflections` (mood 1–5 + catatan, 1 baris per
+   hari) untuk refleksi harian & weekly review (v1.1 PRD §5).
+10. `010-push-subscriptions.sql` — tabel `push_subscriptions` + kolom
+    `tasks.reminder_sent_at` untuk Web Push server-side. Setup lengkap ada di
+    `supabase/functions/send-reminders/README.md`.
 
 Semua tabel memakai Row-Level Security dengan kebijakan *default deny* —
 pengguna hanya bisa membaca/menulis baris miliknya sendiri.

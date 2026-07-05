@@ -2,6 +2,7 @@
 
 import { getTasks } from "@/features/tasks/action";
 import { registerServiceWorker, showTaskNotification } from "@/lib/notifications";
+import { subscribeToPush } from "@/lib/push";
 import { useAlarmStore } from "@/stores/alarm-store";
 import { Task } from "@/types/task";
 import { useQuery } from "@tanstack/react-query";
@@ -36,6 +37,9 @@ export default function ReminderScheduler() {
 
   useEffect(() => {
     registerServiceWorker();
+    // Pastikan langganan Web Push tersimpan untuk user yang izinnya sudah aktif
+    // (mis. sesi berikutnya) — agar reminder tetap terkirim saat app tertutup.
+    subscribeToPush();
   }, []);
 
   useEffect(() => {
