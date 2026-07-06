@@ -102,6 +102,193 @@ async function sendMessage(chatId: number, text: string) {
   });
 }
 
+// ── AI agent (function calling) ────────────────────────────────────────────
+// Memahami konteks: bisa membuat, menyelesaikan, ATAU menghapus task sesuai
+// maksud pesan — bukan selalu membuat baru.
+
+// deno-lint-ignore no-explicit-any
+type Json = any;
+
+const FUNCTIONS = [
+  {
+    name: "create_task",
+    description: "Buat SATU task baru untuk pengguna.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        title: { type: "STRING", description: "Judul task, ringkas." },
+        day_offset: {
+          type: "NUMBER",
+          description: "0=hari ini, 1=besok, 2=lusa, dst.",
+        },
+        time: { type: "STRING", description: "Jam 'HH:mm' bila disebut." },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "complete_task",
+    description: "Tandai task SELESAI. Pakai id dari daftar task.",
+    parameters: {
+      type: "OBJECT",
+      properties: { id: { type: "STRING" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "delete_task",
+    description: "Hapus task. Pakai id dari daftar task.",
+    parameters: {
+      type: "OBJECT",
+      properties: { id: { type: "STRING" } },
+      required: ["id"],
+    },
+  },
+];
+
+function addDaysStr(today: string, offset: number): string {
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+async function geminiGenerate(
+  sys: string,
+  contents: Json[],
+): Promise<Json | null> {
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: sys }] },
+            contents,
+            tools: [{ functionDeclarations: FUNCTIONS }],
+            generationConfig: { temperature: 0.3 },
+          }),
+        },
+      );
+      if (!res.ok) continue;
+      return await res.json();
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function execFn(
+  supabase: Json,
+  userId: string,
+  today: string,
+  name: string,
+  args: Json,
+): Promise<Json> {
+  if (name === "create_task") {
+    const offset = Math.max(0, Math.round(Number(args.day_offset) || 0));
+    const time = args.time ? String(args.time) : null;
+    const { error } = await supabase.from("tasks").insert({
+      user_id: userId,
+      title: String(args.title ?? "Task").slice(0, 200),
+      life_area: "Pribadi",
+      priority: "sedang",
+      due_date: addDaysStr(today, offset),
+      due_time: time,
+      source: "manual",
+      reminder: time ? "push" : "none",
+    });
+    return { success: !error };
+  }
+  if (name === "complete_task") {
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: "done", completed_at: new Date().toISOString() })
+      .eq("id", String(args.id))
+      .eq("user_id", userId);
+    return { success: !error };
+  }
+  if (name === "delete_task") {
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", String(args.id))
+      .eq("user_id", userId);
+    return { success: !error };
+  }
+  return { success: false };
+}
+
+/** Jalankan agent: pahami maksud pesan atas konteks task pengguna. */
+async function runAgent(
+  supabase: Json,
+  userId: string,
+  text: string,
+  today: string,
+): Promise<string> {
+  const { data: tasks } = await supabase
+    .from("tasks")
+    .select("id, title, due_date, due_time, status")
+    .eq("user_id", userId)
+    .or(`due_date.is.null,due_date.gte.${addDaysStr(today, -3)}`)
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .limit(60);
+
+  const taskLines =
+    (tasks ?? [])
+      .map(
+        (t: Json) =>
+          `- id=${t.id} | ${t.title} | ${t.due_date ?? "tanpa tanggal"}${t.due_time ? " " + t.due_time : ""} | ${t.status === "done" ? "SELESAI" : "belum"}`,
+      )
+      .join("\n") || "(belum ada task)";
+
+  const sys = `Kamu asisten Telegram untuk aplikasi "AI Life OS" (Bahasa Indonesia). Hari ini ${today} (zona ${APP_TZ}).
+
+Daftar task pengguna saat ini:
+${taskLines}
+
+Aturan:
+- Pahami MAKSUD pesan: membuat, menyelesaikan, atau menghapus task.
+- Membuat: panggil create_task (day_offset 0=hari ini,1=besok; time "HH:mm" bila disebut).
+- Menyelesaikan/menghapus: cari id paling cocok dari daftar lalu panggil complete_task / delete_task. JANGAN membuat task baru saat pengguna minta hapus/selesai.
+- Bisa memanggil beberapa fungsi sekaligus bila pengguna menyebut banyak hal.
+- Jika tidak ada task yang cocok untuk dihapus/diselesaikan, katakan dengan sopan (jangan buat baru).
+- Balas SINGKAT, hangat, Bahasa Indonesia (boleh 1 emoji). Jangan pernah menyebut id ke pengguna.`;
+
+  const contents: Json[] = [{ role: "user", parts: [{ text }] }];
+  let reply = "";
+
+  for (let turn = 0; turn < 5; turn++) {
+    const resp = await geminiGenerate(sys, contents);
+    const parts: Json[] = resp?.candidates?.[0]?.content?.parts ?? [];
+    if (parts.length === 0) break;
+
+    const calls = parts.filter((p: Json) => p.functionCall);
+    for (const p of parts) if (p.text) reply += p.text;
+    if (calls.length === 0) break;
+
+    contents.push({ role: "model", parts });
+    const responseParts: Json[] = [];
+    for (const c of calls) {
+      const result = await execFn(
+        supabase,
+        userId,
+        today,
+        c.functionCall.name,
+        c.functionCall.args ?? {},
+      );
+      responseParts.push({
+        functionResponse: { name: c.functionCall.name, response: { result } },
+      });
+    }
+    contents.push({ role: "user", parts: responseParts });
+  }
+
+  return reply.trim() || "✅ Sudah kuproses.";
+}
+
 Deno.serve(async (req) => {
   // Verifikasi opsional: Telegram mengirim header secret bila di-set.
   if (
@@ -186,16 +373,14 @@ Deno.serve(async (req) => {
     await sendMessage(
       chatId,
       [
-        "🤖 <b>Yang bisa kamu lakukan:</b>",
+        "🤖 <b>Aku mengerti maksudmu — tinggal ngobrol biasa:</b>",
         "",
-        "• Kirim kalimat biasa untuk membuat task — <b>tanggal & jam otomatis dikenali</b>.",
-        "   contoh: <i>Rapat tim besok jam 2 siang</i>",
-        "   contoh: <i>Olahraga senin 06:30</i>",
-        "   contoh: <i>Bayar listrik tanggal 25</i>",
-        "• /today — lihat task hari ini",
-        "• /help — bantuan ini",
+        "➕ <b>Buat</b>: <i>Rapat tim besok jam 2 siang</i>",
+        "✅ <b>Selesai</b>: <i>udah selesai olahraga</i> / <i>tandai bayar listrik selesai</i>",
+        "🗑️ <b>Hapus</b>: <i>hapus task belajar mobil</i>",
+        "📋 /today — lihat task hari ini",
         "",
-        "Task yang kamu buat langsung muncul di aplikasi & kamu diingatkan tepat waktu.",
+        "Tanggal & jam otomatis dikenali. Semua tersambung dengan aplikasi & pengingatmu.",
       ].join("\n"),
     );
     return new Response("ok");
@@ -226,8 +411,16 @@ Deno.serve(async (req) => {
     return new Response("ok");
   }
 
-  // Teks biasa → pahami tanggal/jam via AI, lalu buat task.
   const today = todayInTz();
+
+  // Dengan AI: agent memahami konteks (buat / selesai / hapus task).
+  if (GEMINI_KEY) {
+    const reply = await runAgent(supabase, userId, text, today);
+    await sendMessage(chatId, reply);
+    return new Response("ok");
+  }
+
+  // Tanpa AI: fallback sederhana — teks jadi judul task hari ini.
   const parsed = await parseTask(text, today);
   const { error } = await supabase.from("tasks").insert({
     user_id: userId,
@@ -237,7 +430,6 @@ Deno.serve(async (req) => {
     due_date: parsed.due_date,
     due_time: parsed.due_time,
     source: "manual",
-    // Ada jam → ingatkan; task juga muncul di app & Google Calendar (bila aktif).
     reminder: parsed.due_time ? "push" : "none",
   });
   if (error) {

@@ -76,7 +76,19 @@ export default function HomeView({
   }, []);
 
   async function onToggle(id: string) {
-    await toggleTask(id);
+    const current = queryClient.getQueryData<Task[]>(["tasks"]);
+    const willBeDone = current?.find((t) => t.id === id)?.status !== "done";
+    // Optimistik: centang langsung berubah, server menyusul.
+    queryClient.setQueryData<Task[]>(["tasks"], (old) =>
+      old?.map((t) =>
+        t.id === id
+          ? { ...t, status: t.status === "done" ? "todo" : "done" }
+          : t,
+      ),
+    );
+    const res = await toggleTask(id);
+    if (res?.error) toast.error(res.error);
+    else if (willBeDone) toast.success("Task selesai 🎉");
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 
@@ -84,7 +96,6 @@ export default function HomeView({
     if (!dueNow) return;
     setReminderDismissed(true);
     await onToggle(dueNow.id);
-    toast.success(`Task "${dueNow.title}" selesai`);
   }
 
   function remSnooze() {

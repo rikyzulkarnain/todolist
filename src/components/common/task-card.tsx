@@ -30,9 +30,15 @@ export function dueLabel(task: Task): string {
 export default function TaskCard({
   task,
   onToggle,
+  selectMode = false,
+  selected = false,
+  onSelect,
 }: {
   task: Task;
   onToggle: (id: string) => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onSelect?: (id: string) => void;
 }) {
   const openTask = useTaskDetailStore((s) => s.openTask);
   const done = task.status === "done";
@@ -42,10 +48,43 @@ export default function TaskCard({
   const doneSub = subtasks.filter((s) => s.status === "done").length;
 
   return (
-    <div className="border-line flex items-start gap-3 rounded-2xl border bg-white px-3.5 py-[13px]">
-      <TaskCheck done={done} onToggle={() => onToggle(task.id)} />
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-2xl border px-3.5 py-[13px] transition",
+        selectMode && selected
+          ? "border-teal bg-mint-2"
+          : "border-line bg-white",
+      )}
+    >
+      {selectMode ? (
+        <button
+          onClick={() => onSelect?.(task.id)}
+          aria-label={selected ? "Batalkan pilih" : "Pilih task"}
+          className={cn(
+            "mt-0.5 flex h-[22px] w-[22px] flex-none items-center justify-center rounded-full border-[1.5px] transition",
+            selected ? "border-teal bg-teal" : "border-line-3 bg-white",
+          )}
+        >
+          {selected && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          )}
+        </button>
+      ) : (
+        <TaskCheck done={done} onToggle={() => onToggle(task.id)} />
+      )}
       <button
-        onClick={() => openTask(task)}
+        onClick={() => (selectMode ? onSelect?.(task.id) : openTask(task))}
         className="min-w-0 flex-1 text-left"
       >
         <div

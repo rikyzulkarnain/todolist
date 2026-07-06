@@ -8,13 +8,14 @@ Bot Telegram dua arah: buat task dari chat, lihat task hari ini, dan (lewat
 | Kirim ke bot | Hasil |
 |---|---|
 | deep link `t.me/<bot>?start=<token>` | Menautkan chat ke akun app |
-| teks biasa | Membuat task — **tanggal & jam otomatis dipahami AI** (mis. "Rapat besok jam 2 siang", "Olahraga senin 06:30", "Bayar listrik tanggal 25") |
+| teks biasa | **AI agent** memahami maksud atas konteks task-mu: buat, selesaikan, atau hapus (mis. "Rapat besok jam 2 siang", "udah selesai olahraga", "hapus task belajar mobil") |
 | `/today` atau `/hari` | Menampilkan daftar task hari ini |
 | `/help` | Bantuan / daftar kemampuan |
 
-> Parsing tanggal/jam memakai Gemini. Set secret `GEMINI_API_KEY` (atau
-> `GOOGLE_GEN_AI_API_KEY`) — tanpa itu, teks dipakai apa adanya sebagai judul
-> dengan tanggal hari ini.
+> Agent memakai Gemini **function calling** dengan daftar task-mu sebagai
+> konteks, jadi "hapus/selesaikan X" tidak membuat task baru. Set secret
+> `GEMINI_API_KEY` (atau `GOOGLE_GEN_AI_API_KEY`). Tanpa key itu, bot turun ke
+> mode sederhana (teks → judul task hari ini).
 
 Reminder task (jenis Notifikasi/Alarm) juga dikirim ke Telegram bila akun
 tertaut — lihat `../send-reminders`.

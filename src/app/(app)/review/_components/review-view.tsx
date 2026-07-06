@@ -231,8 +231,21 @@ export default function ReviewView({ review }: { review: WeeklyReview }) {
 
       <button
         onClick={() => router.push("/reflection")}
-        className="border-line-4 text-teal hover:bg-mint-3 mt-6 h-12 rounded-[14px] border-[1.5px] bg-white text-sm font-bold transition"
+        className="bg-teal hover:bg-teal-deep mt-6 flex h-12 items-center justify-center gap-2 rounded-[14px] text-sm font-bold text-white transition"
       >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
         Tulis refleksi hari ini
       </button>
     </div>

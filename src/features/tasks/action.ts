@@ -327,6 +327,33 @@ export async function deleteTask(id: string): Promise<{ error?: string }> {
   return {};
 }
 
+/** Hapus banyak task sekaligus (mode pilih di daftar Tugas). */
+export async function deleteTasks(
+  ids: string[],
+): Promise<{ error?: string; count?: number }> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sesi berakhir." };
+  if (ids.length === 0) return { count: 0 };
+
+  // Event Google Calendar terkait (jika ada) dihapus di latar belakang.
+  const { data: withEvents } = await supabase
+    .from("tasks")
+    .select("gcal_event_id")
+    .in("id", ids)
+    .not("gcal_event_id", "is", null)
+    .returns<{ gcal_event_id: string }[]>();
+
+  const { error } = await supabase.from("tasks").delete().in("id", ids);
+  if (error) return { error: error.message };
+
+  for (const t of withEvents ?? [])
+    after(() => removeTaskFromGoogleCalendar(user.id, t.gcal_event_id));
+
+  revalidateTaskScreens();
+  return { count: ids.length };
+}
+
 /** Geser task ke hari lain (aksi "Jadwalkan ulang" pada reminder). */
 export async function rescheduleTask(
   id: string,

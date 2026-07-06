@@ -3,13 +3,14 @@
 import TaskCard from "@/components/common/task-card";
 import { LIFE_AREAS } from "@/constants/life-area-constant";
 import { PRIORITIES, PRIORITY_KEYS } from "@/constants/priority-constant";
-import { getTasks, toggleTask } from "@/features/tasks/action";
+import { deleteTasks, getTasks, toggleTask } from "@/features/tasks/action";
 import { cn } from "@/lib/utils";
 import { useSheetStore } from "@/stores/sheet-store";
 import { LifeArea, Task } from "@/types/task";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type GroupBy = "area" | "pr" | "due";
 
@@ -29,14 +30,60 @@ export default function TasksView({ initialTasks }: { initialTasks: Task[] }) {
   const openSheet = useSheetStore((s) => s.openSheet);
   const [groupBy, setGroupBy] = useState<GroupBy>("area");
 
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => getTasks(),
     initialData: initialTasks,
   });
 
+  // Toggle optimistik: status langsung berubah di layar, server menyusul.
   async function onToggle(id: string) {
-    await toggleTask(id);
+    const current = queryClient.getQueryData<Task[]>(["tasks"]);
+    const willBeDone =
+      current?.find((t) => t.id === id)?.status !== "done";
+    queryClient.setQueryData<Task[]>(["tasks"], (old) =>
+      old?.map((t) =>
+        t.id === id
+          ? { ...t, status: t.status === "done" ? "todo" : "done" }
+          : t,
+      ),
+    );
+    const res = await toggleTask(id);
+    if (res?.error) {
+      toast.error(res.error);
+    } else if (willBeDone) {
+      toast.success("Task selesai 🎉");
+    }
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelect() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  async function bulkDelete() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    queryClient.setQueryData<Task[]>(["tasks"], (old) =>
+      old?.filter((t) => !selectedIds.has(t.id)),
+    );
+    exitSelect();
+    const res = await deleteTasks(ids);
+    if (res.error) toast.error(res.error);
+    else toast.success(`${ids.length} tugas dihapus`);
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 
@@ -69,8 +116,47 @@ export default function TasksView({ initialTasks }: { initialTasks: Task[] }) {
 
   return (
     <div className="flex flex-col gap-4 px-5 pt-[22px] pb-[90px]">
-      <div className="text-ink text-[22px] font-extrabold tracking-[-0.4px]">
-        Tugas
+      <div className="flex items-center justify-between">
+        <div className="text-ink text-[22px] font-extrabold tracking-[-0.4px]">
+          Tugas
+        </div>
+        {tasks.length > 0 &&
+          (selectMode ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={bulkDelete}
+                disabled={selectedIds.size === 0}
+                className="text-danger flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-bold transition hover:bg-[#FEF2F2] disabled:opacity-40"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                </svg>
+                Hapus{selectedIds.size ? ` (${selectedIds.size})` : ""}
+              </button>
+              <button
+                onClick={exitSelect}
+                className="text-slate h-9 rounded-lg px-3 text-[13px] font-bold transition hover:bg-[#F1F5F4]"
+              >
+                Batal
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setSelectMode(true)}
+              className="text-teal h-9 rounded-lg px-3 text-[13px] font-bold transition hover:bg-mint-3"
+            >
+              Pilih
+            </button>
+          ))}
       </div>
 
       {/* segmented control */}
@@ -139,7 +225,14 @@ export default function TasksView({ initialTasks }: { initialTasks: Task[] }) {
               </div>
             </div>
             {grp.tasks.map((t) => (
-              <TaskCard key={t.id} task={t} onToggle={onToggle} />
+              <TaskCard
+                key={t.id}
+                task={t}
+                onToggle={onToggle}
+                selectMode={selectMode}
+                selected={selectedIds.has(t.id)}
+                onSelect={toggleSelect}
+              />
             ))}
           </div>
         ))
