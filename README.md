@@ -44,6 +44,11 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
   cap + jam tenang (PRD §6.5). Setup: `supabase/functions/proactive-nudge/`.
 - **Timezone per user** — `profiles.timezone` (dari browser) dipakai untuk
   hitung "hari ini"/jam di server (review, konteks AI, nudge).
+- **Couple Mode** — ruang berbagi (`/couple`, dari Profil): buat ruang → bagikan
+  **kode undangan** → pasangan bergabung. **Task berbagi** & **daftar belanja**
+  yang tersinkron **real-time** (Supabase Realtime), plus daftar anggota. RLS
+  "pemilik ATAU anggota space" (`is_space_member()`); task/goal pribadi tetap
+  privat (`space_id` null). Family Mode (v3) memakai struktur sama.
 - **Asisten AI (Gemini)** — chat berbahasa Indonesia dengan *function calling*:
   - `propose_agenda` → kartu **"Agenda prioritasmu hari ini"** ("Saya bingung hari ini")
   - `create_task` / `complete_task` / `delete_task` dari teks, **suara**
@@ -60,7 +65,7 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 1. `npm install`
 2. Salin `.env.example` → `.env.local`, isi kredensial Supabase + Gemini
    (VAPID opsional, hanya untuk Web Push server-side).
-3. Jalankan migrations `src/migrations/001–013` di Supabase SQL Editor
+3. Jalankan migrations `src/migrations/001–014` di Supabase SQL Editor
    (lihat `src/migrations/README.md`, termasuk setup magic link & Google OAuth).
 4. `npm run dev`
 
@@ -72,11 +77,11 @@ supabase/functions/  # Edge Functions: send-reminders (Web Push), proactive-nudg
 src/
 ├── app/            # App Router: (auth)/login, (onboarding),
 │                   #   (app)/(tabs)/{home,calendar,ai,tasks,profile},
-│                   #   (app)/{reflection,review,goals}
+│                   #   (app)/{reflection,review,goals,couple}
 ├── components/common/  # bottom-nav, add-task-sheet (FAB), task-card, task-detail-sheet, reminder-scheduler, alarm-overlay, dst.
 ├── config/         # akses process.env terpusat
 ├── constants/      # life area, prioritas, model AI
-├── features/       # server actions per domain: auth, tasks, tags, goals, reflection, review, push, assistant (AI: chat/context/memory), ...
+├── features/       # server actions per domain: auth, tasks, tags, goals, reflection, review, push, space (Couple Mode), assistant (AI: chat/context/memory), ...
 ├── hooks/          # use-audio-recorder, use-online
 ├── lib/            # supabase (client/server/auth/proxy), notifications, push, time (tz)
 ├── migrations/     # SQL Supabase (RLS default-deny)

@@ -52,6 +52,7 @@ export default function ProfileView({
 
   const menuRows: { label: string; value: string; href?: string }[] = [
     { label: "Goals & milestone", value: "", href: "/goals" },
+    { label: "Couple Mode", value: "Berbagi", href: "/couple" },
     { label: "Jam produktif", value: profile.productive_time ?? "-" },
     { label: "Bahasa", value: "Indonesia" },
     { label: "Privasi & data", value: "" },

@@ -1,6 +1,6 @@
 # Migrations
 
-Jalankan berurutan (001 → 013) di Supabase SQL Editor:
+Jalankan berurutan (001 → 014) di Supabase SQL Editor:
 
 1. `001-extensions.sql` — uuid + pgvector
 2. `002-auth-profiles.sql` — profil + trigger signup
@@ -29,6 +29,12 @@ Jalankan berurutan (001 → 013) di Supabase SQL Editor:
     long-term memory (PRD §6.3).
 13. `013-proactive-nudges.sql` — tabel `ai_nudges` (frequency cap nudge proaktif,
     PRD §6.5). Edge Function di `supabase/functions/proactive-nudge/README.md`.
+14. `014-couple-mode.sql` — Couple Mode (PRD §5 & §10): `shared_spaces`,
+    `space_members`, `shopping_items`, kolom `space_id` di tasks/goals, fungsi
+    `is_space_member()`/`join_space_by_code()`, dan RLS "pemilik ATAU anggota
+    space". Juga menambah `shopping_items` + `tasks` ke publication
+    `supabase_realtime` (sinkron real-time). Jalankan **sekali** — `alter
+    publication ... add table` error bila tabel sudah terdaftar.
 
 Semua tabel memakai Row-Level Security dengan kebijakan *default deny* —
 pengguna hanya bisa membaca/menulis baris miliknya sendiri.
