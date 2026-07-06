@@ -26,7 +26,7 @@ import {
   Task,
 } from "@/types/task";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const REPEAT_OPTIONS: { value: RepeatRule | ""; name: string }[] = [
@@ -82,6 +82,8 @@ export default function TaskDetailSheet() {
   const [tagInput, setTagInput] = useState("");
   const [subtaskInput, setSubtaskInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const dragStart = useRef<number | null>(null);
 
   // Isi form saat sheet dibuka untuk task baru (dipantau lewat id).
   useEffect(() => {
@@ -104,6 +106,21 @@ export default function TaskDetailSheet() {
   if (!opened || !task) return null;
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+
+  // Swipe/tarik ke bawah pada area grabber untuk menutup sheet.
+  function onDragStart(y: number) {
+    dragStart.current = y;
+  }
+  function onDragMove(y: number) {
+    if (dragStart.current === null) return;
+    const dy = y - dragStart.current;
+    if (dy > 0) setDragY(dy);
+  }
+  function onDragEnd() {
+    if (dragY > 110) closeTask();
+    setDragY(0);
+    dragStart.current = null;
+  }
 
   function addTagFromInput() {
     const clean = tagInput.trim().replace(/,+$/, "");
@@ -201,29 +218,65 @@ export default function TaskDetailSheet() {
         onClick={closeTask}
         className="absolute inset-0 z-50 bg-[rgba(9,40,37,.45)]"
       />
-      <div className="anim-sheet-up absolute right-0 bottom-0 left-0 z-[51] max-h-[88%] overflow-y-auto rounded-t-3xl bg-white px-5 pt-3.5 pb-6">
-        <div className="bg-line-3 mx-auto mb-4 h-1 w-10 rounded-sm" />
-        <div className="mb-3.5 flex items-center justify-between">
+      <div
+        className="anim-sheet-up absolute right-0 bottom-0 left-0 z-[51] max-h-[88%] overflow-y-auto rounded-t-3xl bg-white px-5 pt-3.5 pb-6"
+        style={{
+          transform: dragY ? `translateY(${dragY}px)` : undefined,
+          transition: dragY ? "none" : "transform .22s ease",
+        }}
+      >
+        {/* grabber — tarik ke bawah / klik untuk menutup */}
+        <div
+          onClick={closeTask}
+          onTouchStart={(e) => onDragStart(e.touches[0].clientY)}
+          onTouchMove={(e) => onDragMove(e.touches[0].clientY)}
+          onTouchEnd={onDragEnd}
+          className="-mx-5 -mt-3.5 cursor-pointer px-5 pt-3.5 pb-1"
+          style={{ touchAction: "none" }}
+          aria-label="Tarik atau klik untuk menutup"
+        >
+          <div className="bg-line-3 mx-auto h-1.5 w-11 rounded-full" />
+        </div>
+        <div className="mt-2 mb-3.5 flex items-center justify-between gap-2 pt-3">
           <div className="text-ink text-[17px] font-extrabold">Detail tugas</div>
-          <button
-            onClick={onDelete}
-            disabled={busy}
-            className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-bold text-[#DC2626] transition hover:bg-[#FEF2F2] disabled:opacity-50"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onDelete}
+              disabled={busy}
+              className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-bold text-[#DC2626] transition hover:bg-[#FEF2F2] disabled:opacity-50"
             >
-              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-            </svg>
-            Hapus
-          </button>
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              </svg>
+              Hapus
+            </button>
+            <button
+              onClick={closeTask}
+              aria-label="Tutup"
+              className="text-slate flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-[#F1F5F4]"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <input

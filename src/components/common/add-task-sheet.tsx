@@ -16,7 +16,7 @@ import { useSheetStore } from "@/stores/sheet-store";
 import { LifeArea, Priority, ReminderType } from "@/types/task";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 const DAY_OPTIONS: { value: number; name: string }[] = [
@@ -46,6 +46,8 @@ export default function AddTaskSheet() {
   const [reminder, setReminder] = useState<ReminderType>("push");
   const [busy, setBusy] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const dragStart = useRef<number | null>(null);
 
   const { recording, toggle: toggleVoice } = useAudioRecorder({
     onRecorded: async (audio) => {
@@ -68,6 +70,12 @@ export default function AddTaskSheet() {
   async function pickReminder(value: ReminderType) {
     setReminder(value);
     if (value !== "none") await ensureNotificationPermission();
+  }
+
+  function onDragEnd() {
+    if (dragY > 110) closeSheet();
+    setDragY(0);
+    dragStart.current = null;
   }
 
   async function save() {
@@ -131,10 +139,50 @@ export default function AddTaskSheet() {
             onClick={closeSheet}
             className="absolute inset-0 z-50 bg-[rgba(9,40,37,.45)]"
           />
-          <div className="anim-sheet-up absolute right-0 bottom-0 left-0 z-[51] rounded-t-3xl bg-white px-5 pt-3.5 pb-6">
-            <div className="bg-line-3 mx-auto mb-4 h-1 w-10 rounded-sm" />
-            <div className="text-ink mb-3.5 text-[17px] font-extrabold">
-              Tambah tugas
+          <div
+            className="anim-sheet-up absolute right-0 bottom-0 left-0 z-[51] max-h-[92%] overflow-y-auto rounded-t-3xl bg-white px-5 pt-3.5 pb-6"
+            style={{
+              transform: dragY ? `translateY(${dragY}px)` : undefined,
+              transition: dragY ? "none" : "transform .22s ease",
+            }}
+          >
+            {/* grabber — tarik ke bawah / klik untuk menutup */}
+            <div
+              onClick={closeSheet}
+              onTouchStart={(e) => (dragStart.current = e.touches[0].clientY)}
+              onTouchMove={(e) => {
+                if (dragStart.current === null) return;
+                const dy = e.touches[0].clientY - dragStart.current;
+                if (dy > 0) setDragY(dy);
+              }}
+              onTouchEnd={onDragEnd}
+              className="-mx-5 -mt-3.5 cursor-pointer px-5 pt-3.5 pb-1"
+              style={{ touchAction: "none" }}
+              aria-label="Tarik atau klik untuk menutup"
+            >
+              <div className="bg-line-3 mx-auto h-1.5 w-11 rounded-full" />
+            </div>
+            <div className="mt-2 mb-3.5 flex items-center justify-between pt-3">
+              <div className="text-ink text-[17px] font-extrabold">
+                Tambah tugas
+              </div>
+              <button
+                onClick={closeSheet}
+                aria-label="Tutup"
+                className="text-slate flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-[#F1F5F4]"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
             </div>
             <div className="flex gap-2">
               <input

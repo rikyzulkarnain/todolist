@@ -1,5 +1,6 @@
 "use client";
 
+import InstallButton from "@/components/common/install-button";
 import { signOutAction } from "@/features/auth/action";
 import {
   disconnectGoogle,
@@ -210,6 +211,9 @@ export default function ProfileView({
           Kuota di-reset setiap pukul 00.00
         </div>
       </div>
+
+      {/* install PWA (muncul bila bisa dipasang) */}
+      <InstallButton />
 
       {/* notifikasi */}
       <div className="border-line flex items-center gap-3 rounded-[18px] border bg-white px-[18px] py-4">
