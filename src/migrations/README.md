@@ -1,6 +1,6 @@
 # Migrations
 
-Jalankan berurutan (001 → 014) di Supabase SQL Editor:
+Jalankan berurutan (001 → 016) di Supabase SQL Editor:
 
 1. `001-extensions.sql` — uuid + pgvector
 2. `002-auth-profiles.sql` — profil + trigger signup
@@ -35,6 +35,10 @@ Jalankan berurutan (001 → 014) di Supabase SQL Editor:
     space". Juga menambah `shopping_items` + `tasks` ke publication
     `supabase_realtime` (sinkron real-time). Jalankan **sekali** — `alter
     publication ... add table` error bila tabel sudah terdaftar.
+15. `015-telegram.sql` — tabel `telegram_links` (integrasi bot Telegram, v3).
+    Edge Function di `supabase/functions/telegram-webhook/README.md`.
+16. `016-google-calendar.sql` — tabel `google_calendar_links` (RLS default-deny,
+    token OAuth hanya via service role) + kolom `tasks.gcal_event_id`.
 
 Semua tabel memakai Row-Level Security dengan kebijakan *default deny* —
 pengguna hanya bisa membaca/menulis baris miliknya sendiri.

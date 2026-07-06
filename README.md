@@ -44,11 +44,19 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
   cap + jam tenang (PRD §6.5). Setup: `supabase/functions/proactive-nudge/`.
 - **Timezone per user** — `profiles.timezone` (dari browser) dipakai untuk
   hitung "hari ini"/jam di server (review, konteks AI, nudge).
-- **Couple Mode** — ruang berbagi (`/couple`, dari Profil): buat ruang → bagikan
-  **kode undangan** → pasangan bergabung. **Task berbagi** & **daftar belanja**
-  yang tersinkron **real-time** (Supabase Realtime), plus daftar anggota. RLS
-  "pemilik ATAU anggota space" (`is_space_member()`); task/goal pribadi tetap
-  privat (`space_id` null). Family Mode (v3) memakai struktur sama.
+- **Couple / Family Mode** — ruang berbagi (`/couple`, dari Profil): buat ruang
+  (Berdua/Keluarga) → bagikan **kode undangan** → anggota bergabung. **Task
+  berbagi** (dengan tanggal & jam, muncul di Tugas & Kalender tiap anggota dan
+  mengingatkan semua) & **daftar belanja** tersinkron **real-time** (Supabase
+  Realtime). RLS "pemilik ATAU anggota space" (`is_space_member()`); task/goal
+  pribadi tetap privat (`space_id` null).
+- **Integrasi Telegram (v3)** — bot dua arah (`supabase/functions/telegram-webhook`):
+  hubungkan akun dari Profil (deep link), buat task dari chat, `/today` untuk
+  daftar hari ini, dan terima **reminder di Telegram**. Setup di README fungsi.
+- **Integrasi Google Calendar (v3)** — OAuth dari Profil; task **bertanggal**
+  tersinkron otomatis (buat/ubah/hapus event) ke kalender. Token disimpan di
+  tabel RLS default-deny (hanya server via service role). Butuh Client ID/Secret
+  di env + redirect URI `/api/google/callback` terdaftar di Google Cloud.
 - **Asisten AI (Gemini)** — chat berbahasa Indonesia dengan *function calling*:
   - `propose_agenda` → kartu **"Agenda prioritasmu hari ini"** ("Saya bingung hari ini")
   - `create_task` / `complete_task` / `delete_task` dari teks, **suara**
@@ -65,7 +73,7 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 1. `npm install`
 2. Salin `.env.example` → `.env.local`, isi kredensial Supabase + Gemini
    (VAPID opsional, hanya untuk Web Push server-side).
-3. Jalankan migrations `src/migrations/001–014` di Supabase SQL Editor
+3. Jalankan migrations `src/migrations/001–016` di Supabase SQL Editor
    (lihat `src/migrations/README.md`, termasuk setup magic link & Google OAuth).
 4. `npm run dev`
 
@@ -73,17 +81,18 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 
 ```
 public/            # sw.js (service worker notifikasi), manifest.webmanifest, icon.svg
-supabase/functions/  # Edge Functions: send-reminders (Web Push), proactive-nudge
+supabase/functions/  # Edge Functions: send-reminders (Web Push + Telegram),
+                     #   proactive-nudge, telegram-webhook
 src/
 ├── app/            # App Router: (auth)/login, (onboarding),
 │                   #   (app)/(tabs)/{home,calendar,ai,tasks,profile},
-│                   #   (app)/{reflection,review,goals,couple}
+│                   #   (app)/{reflection,review,goals,couple}, api/google/*
 ├── components/common/  # bottom-nav, add-task-sheet (FAB), task-card, task-detail-sheet, reminder-scheduler, alarm-overlay, dst.
 ├── config/         # akses process.env terpusat
 ├── constants/      # life area, prioritas, model AI
-├── features/       # server actions per domain: auth, tasks, tags, goals, reflection, review, push, space (Couple Mode), assistant (AI: chat/context/memory), ...
+├── features/       # server actions per domain: auth, tasks, tags, goals, reflection, review, push, space, telegram, google (Calendar), assistant (AI: chat/context/memory), ...
 ├── hooks/          # use-audio-recorder, use-online
-├── lib/            # supabase (client/server/auth/proxy), notifications, push, time (tz)
+├── lib/            # supabase (client/server/service/auth/proxy), notifications, push, time (tz)
 ├── migrations/     # SQL Supabase (RLS default-deny)
 ├── providers/      # react-query
 ├── stores/         # zustand (sheet, task-detail, alarm)

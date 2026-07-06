@@ -14,8 +14,22 @@ import webpush from "npm:web-push@3.6.7";
 // Zona waktu wall-clock task. due_time disimpan sebagai HH:mm lokal tanpa tz,
 // jadi "sekarang" dihitung di zona ini (default Asia/Jakarta, WIB).
 const APP_TZ = Deno.env.get("APP_TZ") ?? "Asia/Jakarta";
+const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
 
 const AREA_ICON = "/icon.svg";
+
+async function sendTelegram(chatId: number, text: string) {
+  if (!TELEGRAM_TOKEN) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+    });
+  } catch {
+    /* diabaikan */
+  }
+}
 
 function nowParts(): { date: string; time: string } {
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -100,6 +114,22 @@ Deno.serve(async () => {
           await supabase.from("push_subscriptions").delete().eq("id", sub.id);
         }
       }
+    }
+
+    // Kirim juga via Telegram bila akun user tertaut.
+    const { data: tg } = await supabase
+      .from("telegram_links")
+      .select("chat_id")
+      .eq("user_id", task.user_id)
+      .eq("linked", true)
+      .maybeSingle();
+    if (tg?.chat_id) {
+      const prefix = task.reminder === "alarm" ? "⏰ <b>Alarm</b>" : "🔔 <b>Pengingat</b>";
+      await sendTelegram(
+        tg.chat_id,
+        `${prefix}\n${task.title}\n${task.due_time} · ${task.life_area}`,
+      );
+      sent++;
     }
 
     await supabase

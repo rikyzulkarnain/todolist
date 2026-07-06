@@ -14,6 +14,10 @@ import { addDays, addMonths, format, parseISO } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { generateTaskEmbedding, TaskEmbeddingFields } from "../ai/embedding";
+import {
+  removeTaskFromGoogleCalendar,
+  syncTaskToGoogleCalendar,
+} from "../google/calendar";
 
 /**
  * Hitung embedding & simpan ke task SETELAH respons dikirim (next/server
@@ -135,6 +139,7 @@ export async function addTask(
     due_date,
     due_time,
   });
+  after(() => syncTaskToGoogleCalendar(data.id as string));
   revalidateTaskScreens();
   return { id: data.id as string };
 }
@@ -193,6 +198,7 @@ export async function updateTask(
     due_date,
     due_time,
   });
+  after(() => syncTaskToGoogleCalendar(input.id));
   revalidateTaskScreens();
   return {};
 }
@@ -305,9 +311,18 @@ export async function deleteTask(id: string): Promise<{ error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { error: "Sesi berakhir." };
 
+  // Ambil event Google Calendar (jika ada) sebelum baris terhapus.
+  const { data: existing } = await supabase
+    .from("tasks")
+    .select("gcal_event_id")
+    .eq("id", id)
+    .maybeSingle<{ gcal_event_id: string | null }>();
+
   const { error } = await supabase.from("tasks").delete().eq("id", id);
 
   if (error) return { error: error.message };
+  if (existing?.gcal_event_id)
+    after(() => removeTaskFromGoogleCalendar(user.id, existing.gcal_event_id!));
   revalidateTaskScreens();
   return {};
 }
@@ -337,6 +352,7 @@ export async function rescheduleTask(
   if (error) return { error: error.message };
   // Tanggal ikut di teks embedding → re-embed di latar belakang.
   embedTaskInBackground(id, { ...task, due_date });
+  after(() => syncTaskToGoogleCalendar(id));
   revalidateTaskScreens();
   return {};
 }

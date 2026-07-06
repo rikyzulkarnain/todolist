@@ -1,15 +1,27 @@
 "use client";
 
 import { signOutAction } from "@/features/auth/action";
+import {
+  disconnectGoogle,
+  getGoogleStatus,
+  GoogleStatus,
+} from "@/features/google/action";
 import { QuotaInfo } from "@/features/profile/action";
+import {
+  createTelegramLink,
+  getTelegramStatus,
+  TelegramStatus,
+  unlinkTelegram,
+} from "@/features/telegram/action";
 import {
   ensureNotificationPermission,
   permissionState,
   registerServiceWorker,
 } from "@/lib/notifications";
 import { subscribeToPush } from "@/lib/push";
+import { cn } from "@/lib/utils";
 import { Profile } from "@/types/profile";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -21,10 +33,14 @@ export default function ProfileView({
   quota: QuotaInfo;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(
     "default",
   );
+  const [tg, setTg] = useState<TelegramStatus | null>(null);
+  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [intgBusy, setIntgBusy] = useState(false);
 
   const name = profile.name ?? "Pengguna";
   const initial = name.charAt(0).toUpperCase();
@@ -33,7 +49,62 @@ export default function ProfileView({
   useEffect(() => {
     setPerm(permissionState());
     registerServiceWorker();
+    getTelegramStatus().then(setTg);
+    getGoogleStatus().then(setGoogle);
   }, []);
+
+  // Umpan balik setelah kembali dari OAuth Google (?gcal=...).
+  useEffect(() => {
+    const g = searchParams.get("gcal");
+    if (!g) return;
+    if (g === "connected") {
+      toast.success("Google Calendar terhubung");
+      getGoogleStatus().then(setGoogle);
+    } else if (g === "norefresh")
+      toast.error("Coba lagi & pilih 'izinkan' — token refresh tidak diterima.");
+    else if (g === "unconfigured")
+      toast.error("Google Calendar belum dikonfigurasi (env).");
+    else if (g !== "connected") toast.error("Gagal menghubungkan Google Calendar.");
+    router.replace("/profile", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function connectTelegram() {
+    setIntgBusy(true);
+    try {
+      const res = await createTelegramLink();
+      if (res.error || !res.url) {
+        toast.error(res.error ?? "Gagal membuat tautan Telegram.");
+        return;
+      }
+      window.open(res.url, "_blank");
+      toast("Tekan Start di Telegram, lalu kembali ke sini.");
+    } finally {
+      setIntgBusy(false);
+    }
+  }
+
+  async function disconnectTelegram() {
+    setIntgBusy(true);
+    try {
+      await unlinkTelegram();
+      setTg({ linked: false, username: null });
+      toast.success("Telegram diputus");
+    } finally {
+      setIntgBusy(false);
+    }
+  }
+
+  async function disconnectGoogleCal() {
+    setIntgBusy(true);
+    try {
+      await disconnectGoogle();
+      setGoogle((g) => (g ? { ...g, connected: false } : g));
+      toast.success("Google Calendar diputus");
+    } finally {
+      setIntgBusy(false);
+    }
+  }
 
   async function enableNotifications() {
     const ok = await ensureNotificationPermission();
@@ -152,6 +223,76 @@ export default function ProfileView({
             Aktifkan
           </button>
         )}
+      </div>
+
+      {/* integrasi */}
+      <div className="border-line overflow-hidden rounded-[18px] border bg-white">
+        {/* Telegram */}
+        <div className="border-line-soft flex items-center gap-3 border-b px-[18px] py-3.5">
+          <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-[#E7F3FB]">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#229ED9">
+              <path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-4.9 9-8.1c.4-.3-.1-.5-.6-.2L6.4 13.3l-4.8-1.5c-1-.3-1-.9.2-1.4L20.6 3c.9-.3 1.6.2 1.3 1.3Z" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-ink-2 text-sm font-bold">Telegram</div>
+            <div className="text-mute text-[12px]">
+              {tg?.linked
+                ? `Terhubung${tg.username ? " · @" + tg.username : ""}`
+                : "Buat task & terima reminder lewat bot"}
+            </div>
+          </div>
+          <button
+            onClick={tg?.linked ? disconnectTelegram : connectTelegram}
+            disabled={intgBusy}
+            className={cn(
+              "h-9 flex-none rounded-[10px] px-3.5 text-[12.5px] font-bold transition disabled:opacity-50",
+              tg?.linked
+                ? "text-danger border-danger-line border bg-white"
+                : "bg-teal hover:bg-teal-deep text-white",
+            )}
+          >
+            {tg?.linked ? "Putus" : "Hubungkan"}
+          </button>
+        </div>
+        {/* Google Calendar */}
+        <div className="flex items-center gap-3 px-[18px] py-3.5">
+          <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-[#FDECEC]">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#EA4335" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <path d="M16 2v4M8 2v4M3 10h18" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-ink-2 text-sm font-bold">Google Calendar</div>
+            <div className="text-mute text-[12px]">
+              {google?.connected
+                ? "Task bertanggal tersinkron"
+                : google && !google.configured
+                  ? "Belum dikonfigurasi"
+                  : "Sinkronkan task ke kalendermu"}
+            </div>
+          </div>
+          {google?.connected ? (
+            <button
+              onClick={disconnectGoogleCal}
+              disabled={intgBusy}
+              className="text-danger border-danger-line h-9 flex-none rounded-[10px] border bg-white px-3.5 text-[12.5px] font-bold transition disabled:opacity-50"
+            >
+              Putus
+            </button>
+          ) : (
+            <a
+              href="/api/google/connect"
+              className={cn(
+                "bg-teal hover:bg-teal-deep flex h-9 flex-none items-center rounded-[10px] px-3.5 text-[12.5px] font-bold text-white transition",
+                google && !google.configured && "pointer-events-none opacity-40",
+              )}
+            >
+              Hubungkan
+            </a>
+          )}
+        </div>
       </div>
 
       {/* upgrade */}
