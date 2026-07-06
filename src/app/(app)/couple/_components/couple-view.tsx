@@ -14,6 +14,7 @@ import {
   toggleSharedTask,
   toggleShoppingItem,
 } from "@/features/space/action";
+import { dueLabel } from "@/components/common/task-card";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { SpaceWithMembers } from "@/types/space";
@@ -94,7 +95,9 @@ export default function CoupleView({
           </svg>
         </button>
         <div>
-          <div className="text-ink text-lg font-extrabold">Couple Mode</div>
+          <div className="text-ink text-lg font-extrabold">
+            {space?.space.type === "family" ? "Family Mode" : "Couple Mode"}
+          </div>
           <div className="text-mute text-[12.5px]">
             {space ? space.space.name : "Berbagi task, kalender & belanja"}
           </div>
@@ -117,15 +120,20 @@ export default function CoupleView({
 function SpaceOnboarding({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [type, setType] = useState<"couple" | "family">("couple");
   const [busy, setBusy] = useState(false);
 
   async function create() {
     if (busy) return;
     setBusy(true);
     try {
-      const res = await createSpace(name);
+      const res = await createSpace(name, type);
       if (res.error) return toast.error(res.error);
-      toast.success("Ruang dibuat — bagikan kodenya ke pasanganmu");
+      toast.success(
+        type === "family"
+          ? "Ruang keluarga dibuat — bagikan kodenya ke anggota"
+          : "Ruang dibuat — bagikan kodenya ke pasanganmu",
+      );
       onDone();
     } finally {
       setBusy(false);
@@ -148,17 +156,47 @@ function SpaceOnboarding({ onDone }: { onDone: () => void }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-[20px] bg-[linear-gradient(150deg,#0F766E,#0A5750)] p-5 text-white">
-        <div className="text-2xl">💞</div>
-        <div className="mt-2 text-[17px] font-extrabold">Buat ruang berdua</div>
+        <div className="text-2xl">{type === "family" ? "👨‍👩‍👧‍👦" : "💞"}</div>
+        <div className="mt-2 text-[17px] font-extrabold">Buat ruang berbagi</div>
         <div className="mt-1 text-[13px] leading-[1.55] text-[#B9E6E0]">
           Task, kalender, dan daftar belanja yang tersinkron real-time untuk kamu
-          dan pasangan.
+          dan {type === "family" ? "keluarga" : "pasangan"}.
         </div>
+
+        {/* pilih jenis ruang */}
+        <div className="mt-4 flex gap-2">
+          {(
+            [
+              { key: "couple", label: "Berdua", emoji: "💞" },
+              { key: "family", label: "Keluarga", emoji: "👨‍👩‍👧‍👦" },
+            ] as const
+          ).map((o) => {
+            const sel = type === o.key;
+            return (
+              <button
+                key={o.key}
+                onClick={() => setType(o.key)}
+                className={cn(
+                  "flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold transition",
+                  sel
+                    ? "text-teal bg-white"
+                    : "bg-white/15 text-white hover:bg-white/25",
+                )}
+              >
+                <span>{o.emoji}</span>
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Nama ruang (mis. Rumah Kami)"
-          className="mt-4 h-11 w-full rounded-xl border-0 bg-white/95 px-3.5 text-sm text-[#0B3B36] outline-none placeholder:text-[#6B8A85]"
+          placeholder={
+            type === "family" ? "Nama keluarga (mis. Keluarga Hayati)" : "Nama ruang (mis. Rumah Kami)"
+          }
+          className="mt-3 h-11 w-full rounded-xl border-0 bg-white/95 px-3.5 text-sm text-[#0B3B36] outline-none placeholder:text-[#6B8A85]"
         />
         <button
           onClick={create}
@@ -211,6 +249,8 @@ function SpaceDashboard({ space }: { space: SpaceWithMembers }) {
   });
 
   const [taskInput, setTaskInput] = useState("");
+  const [taskDate, setTaskDate] = useState("");
+  const [taskTime, setTaskTime] = useState("");
   const [itemInput, setItemInput] = useState("");
 
   const refetchTasks = () =>
@@ -221,17 +261,33 @@ function SpaceDashboard({ space }: { space: SpaceWithMembers }) {
   async function onAddTask() {
     const clean = taskInput.trim();
     if (!clean) return;
+    const res = await addSharedTask(spaceId, {
+      title: clean,
+      dueDate: taskDate || null,
+      dueTime: taskTime || null,
+    });
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
     setTaskInput("");
-    const res = await addSharedTask(spaceId, clean);
-    if (res.error) toast.error(res.error);
+    setTaskDate("");
+    setTaskTime("");
+    toast.success("Task bersama ditambahkan — muncul di Tugas & Kalender kalian");
     refetchTasks();
+    // Task berbagi juga tampil di daftar Tugas/Kalender pribadi tiap anggota.
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
   async function onAddItem() {
     const clean = itemInput.trim();
     if (!clean) return;
-    setItemInput("");
     const res = await addShoppingItem(spaceId, clean);
-    if (res.error) toast.error(res.error);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    setItemInput("");
+    toast.success("Barang ditambahkan ke daftar belanja");
     refetchItems();
   }
   async function copyCode() {
@@ -305,20 +361,34 @@ function SpaceDashboard({ space }: { space: SpaceWithMembers }) {
 
       {/* task berbagi */}
       <Section title="Task berbagi" count={tasks.length}>
-        <div className="mb-2.5 flex gap-2">
+        <div className="mb-2.5 flex flex-col gap-2">
           <input
             value={taskInput}
             onChange={(e) => setTaskInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onAddTask()}
             placeholder="Tambah task bersama…"
-            className="border-line-2 bg-soft text-ink-2 focus:border-teal h-10 min-w-0 flex-1 rounded-xl border-[1.5px] px-3.5 text-[13.5px] outline-none focus:bg-white"
+            className="border-line-2 bg-soft text-ink-2 focus:border-teal h-10 w-full rounded-xl border-[1.5px] px-3.5 text-[13.5px] outline-none focus:bg-white"
           />
-          <button
-            onClick={onAddTask}
-            className="bg-teal hover:bg-teal-deep h-10 rounded-xl px-3.5 text-[13px] font-bold text-white transition"
-          >
-            Tambah
-          </button>
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={taskDate}
+              onChange={(e) => setTaskDate(e.target.value)}
+              className="border-line-2 bg-soft text-ink-2 focus:border-teal h-10 min-w-0 flex-1 rounded-xl border-[1.5px] px-3 text-[12.5px] font-semibold outline-none focus:bg-white"
+            />
+            <input
+              type="time"
+              value={taskTime}
+              onChange={(e) => setTaskTime(e.target.value)}
+              className="border-line-2 bg-soft text-ink-2 focus:border-teal h-10 w-[108px] rounded-xl border-[1.5px] px-3 text-[12.5px] font-semibold outline-none focus:bg-white"
+            />
+            <button
+              onClick={onAddTask}
+              className="bg-teal hover:bg-teal-deep h-10 rounded-xl px-3.5 text-[13px] font-bold text-white transition"
+            >
+              Tambah
+            </button>
+          </div>
         </div>
         {tasks.length === 0 ? (
           <Empty label="Belum ada task bersama" />
@@ -339,7 +409,7 @@ function SpaceDashboard({ space }: { space: SpaceWithMembers }) {
                     refetchTasks();
                   }}
                   title={t.title}
-                  sub={`oleh ${nameOf(t.user_id)}`}
+                  sub={`${t.due_date ? dueLabel(t) + " · " : ""}oleh ${nameOf(t.user_id)}`}
                 />
               );
             })}

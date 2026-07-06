@@ -21,6 +21,7 @@ export type Task = {
   id: string;
   user_id: string;
   goal_id: string | null;
+  space_id: string | null;
   parent_task_id: string | null;
   title: string;
   notes: string | null;

@@ -61,12 +61,13 @@ export async function getMySpace(): Promise<SpaceWithMembers | null> {
 
 export async function createSpace(
   name: string,
+  type: "couple" | "family" = "couple",
 ): Promise<{ error?: string; id?: string }> {
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) return { error: "Sesi berakhir." };
 
-  const clean = name.trim() || "Ruang Kami";
+  const clean = name.trim() || (type === "family" ? "Keluarga Kami" : "Ruang Kami");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -83,7 +84,7 @@ export async function createSpace(
       .from("shared_spaces")
       .insert({
         name: clean,
-        type: "couple",
+        type,
         invite_code: invite,
         created_by: user.id,
       })
@@ -167,22 +168,26 @@ export async function getSharedTasks(spaceId: string): Promise<Task[]> {
 
 export async function addSharedTask(
   spaceId: string,
-  title: string,
+  input: { title: string; dueDate?: string | null; dueTime?: string | null },
 ): Promise<{ error?: string }> {
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) return { error: "Sesi berakhir." };
 
-  const clean = title.trim();
+  const clean = input.title.trim();
   if (!clean) return { error: "Tulis judul dulu" };
 
+  const due_time = input.dueTime || null;
   const { error } = await supabase.from("tasks").insert({
     user_id: user.id,
     space_id: spaceId,
     title: clean,
     life_area: "Keluarga",
     priority: "sedang",
-    reminder: "none",
+    due_date: input.dueDate || null,
+    due_time,
+    // Ada waktu → ingatkan kedua anggota (task berbagi ikut di getTasks mereka).
+    reminder: due_time ? "push" : "none",
   });
   if (error) return { error: error.message };
 

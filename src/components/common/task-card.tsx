@@ -72,6 +72,27 @@ export default function TaskCard({
           <span className="text-mute-2 text-[11px] font-semibold">
             {dueLabel(task)}
           </span>
+          {task.space_id && (
+            <span className="text-teal flex items-center gap-1 text-[10.5px] font-bold">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-label="Berbagi"
+              >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Berbagi
+            </span>
+          )}
           {task.repeat_rule && (
             <svg
               width="12"

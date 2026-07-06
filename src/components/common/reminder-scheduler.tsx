@@ -2,7 +2,11 @@
 
 import { syncTimezone } from "@/features/profile/action";
 import { getTasks } from "@/features/tasks/action";
-import { registerServiceWorker, showTaskNotification } from "@/lib/notifications";
+import {
+  playReminderChime,
+  registerServiceWorker,
+  showTaskNotification,
+} from "@/lib/notifications";
 import { subscribeToPush } from "@/lib/push";
 import { useAlarmStore } from "@/stores/alarm-store";
 import { Task } from "@/types/task";
@@ -71,6 +75,8 @@ export default function ReminderScheduler() {
           requireInteraction: true,
         });
       } else {
+        // Notifikasi 'push' + bunyi bel (notifikasi web sering senyap).
+        playReminderChime();
         showTaskNotification("Pengingat: " + task.title, {
           body: task.due_time
             ? `Jadwal ${task.due_time} · ${task.life_area}`

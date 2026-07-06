@@ -12,7 +12,22 @@ import {
 } from "@/types/task";
 import { addDays, addMonths, format, parseISO } from "date-fns";
 import { revalidatePath } from "next/cache";
-import { generateTaskEmbedding } from "../ai/embedding";
+import { after } from "next/server";
+import { generateTaskEmbedding, TaskEmbeddingFields } from "../ai/embedding";
+
+/**
+ * Hitung embedding & simpan ke task SETELAH respons dikirim (next/server
+ * `after`) — insert/update terasa instan, embedding menyusul di latar belakang.
+ * Best-effort: kalau gagal (kuota/offline), task tetap tanpa embedding.
+ */
+function embedTaskInBackground(taskId: string, fields: TaskEmbeddingFields) {
+  after(async () => {
+    const embedding = await generateTaskEmbedding(fields);
+    if (!embedding) return;
+    const supabase = await createClient();
+    await supabase.from("tasks").update({ embedding }).eq("id", taskId);
+  });
+}
 
 const DATE_FMT = "yyyy-MM-dd";
 
@@ -34,7 +49,9 @@ function mapTags(row: TaskRow): Tag[] {
 }
 
 /**
- * Task top-level milik user (parent_task_id null) beserta tags & subtask-nya.
+ * Task top-level (parent_task_id null) beserta tags & subtask-nya. RLS
+ * mengembalikan task milik user SENDIRI + task berbagi dari space yang
+ * diikuti (Couple/Family) — jadi task pasangan ikut muncul di Tugas & Kalender.
  * Subtask dinested ke induknya, bukan ditampilkan sebagai item list terpisah.
  */
 export async function getTasks(): Promise<Task[]> {
@@ -45,7 +62,6 @@ export async function getTasks(): Promise<Task[]> {
   const { data } = await supabase
     .from("tasks")
     .select("*, task_tags(tags(id, name))")
-    .eq("user_id", user.id)
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("due_time", { ascending: true, nullsFirst: false })
     .returns<TaskRow[]>();
@@ -93,14 +109,6 @@ export async function addTask(
 
   const due_date = format(addDays(new Date(), input.dayOffset), DATE_FMT);
   const due_time = input.time || null;
-  // Embedding untuk pencarian semantik (pola createTransaction fina-app).
-  const embedding = await generateTaskEmbedding({
-    title,
-    life_area: input.lifeArea,
-    priority: input.priority,
-    due_date,
-    due_time,
-  });
 
   const { data, error } = await supabase
     .from("tasks")
@@ -114,12 +122,19 @@ export async function addTask(
       repeat_rule: input.repeatRule ?? null,
       reminder: input.reminder ?? "push",
       source: input.source ?? "manual",
-      ...(embedding ? { embedding } : {}),
     })
     .select("id")
     .single();
 
   if (error) return { error: error.message };
+  // Embedding pencarian semantik dihitung di latar belakang (respons instan).
+  embedTaskInBackground(data.id as string, {
+    title,
+    life_area: input.lifeArea,
+    priority: input.priority,
+    due_date,
+    due_time,
+  });
   revalidateTaskScreens();
   return { id: data.id as string };
 }
@@ -150,16 +165,9 @@ export async function updateTask(
 
   const due_date = input.dueDate;
   const due_time = input.time || null;
-  // Judul/area/tanggal ikut di teks embedding → re-embed saat diedit.
-  const embedding = await generateTaskEmbedding({
-    title,
-    notes: input.notes,
-    life_area: input.lifeArea,
-    priority: input.priority,
-    due_date,
-    due_time,
-  });
 
+  // RLS "own or shared tasks" membatasi akses (pemilik atau anggota space),
+  // jadi cukup filter by id — task berbagi tetap bisa diedit anggota.
   const { error } = await supabase
     .from("tasks")
     .update({
@@ -172,12 +180,19 @@ export async function updateTask(
       repeat_rule: input.repeatRule ?? null,
       ...(input.reminder ? { reminder: input.reminder } : {}),
       ...(input.goalId !== undefined ? { goal_id: input.goalId } : {}),
-      ...(embedding ? { embedding } : {}),
     })
-    .eq("id", input.id)
-    .eq("user_id", user.id);
+    .eq("id", input.id);
 
   if (error) return { error: error.message };
+  // Judul/area/tanggal ikut di teks embedding → re-embed di latar belakang.
+  embedTaskInBackground(input.id, {
+    title,
+    notes: input.notes,
+    life_area: input.lifeArea,
+    priority: input.priority,
+    due_date,
+    due_time,
+  });
   revalidateTaskScreens();
   return {};
 }
@@ -233,11 +248,13 @@ export async function toggleTask(id: string): Promise<{ error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { error: "Sesi berakhir." };
 
+  // RLS membatasi ke task milik sendiri / space yang diikuti — cukup filter id.
   const { data: task } = await supabase
     .from("tasks")
-    .select("status, title, life_area, priority, due_date, due_time, repeat_rule")
+    .select(
+      "status, title, life_area, priority, due_date, due_time, repeat_rule, space_id",
+    )
     .eq("id", id)
-    .eq("user_id", user.id)
     .single();
   if (!task) return { error: "Task tidak ditemukan." };
 
@@ -248,31 +265,35 @@ export async function toggleTask(id: string): Promise<{ error?: string }> {
       status: done ? "todo" : "done",
       completed_at: done ? null : new Date().toISOString(),
     })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (error) return { error: error.message };
 
   // Task berulang: saat diselesaikan, buat kemunculan berikutnya (todo baru).
   if (!done && task.repeat_rule && task.due_date) {
     const due_date = nextDueDate(task.due_date, task.repeat_rule as RepeatRule);
-    const embedding = await generateTaskEmbedding({
-      title: task.title,
-      life_area: task.life_area,
-      priority: task.priority,
-      due_date,
-      due_time: task.due_time,
-    });
-    await supabase.from("tasks").insert({
-      user_id: user.id,
-      title: task.title,
-      life_area: task.life_area,
-      priority: task.priority,
-      due_date,
-      due_time: task.due_time,
-      repeat_rule: task.repeat_rule,
-      ...(embedding ? { embedding } : {}),
-    });
+    const { data: next } = await supabase
+      .from("tasks")
+      .insert({
+        user_id: user.id,
+        space_id: task.space_id ?? null,
+        title: task.title,
+        life_area: task.life_area,
+        priority: task.priority,
+        due_date,
+        due_time: task.due_time,
+        repeat_rule: task.repeat_rule,
+      })
+      .select("id")
+      .single();
+    if (next)
+      embedTaskInBackground(next.id as string, {
+        title: task.title,
+        life_area: task.life_area,
+        priority: task.priority,
+        due_date,
+        due_time: task.due_time,
+      });
   }
 
   revalidateTaskScreens();
@@ -284,11 +305,7 @@ export async function deleteTask(id: string): Promise<{ error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { error: "Sesi berakhir." };
 
-  const { error } = await supabase
-    .from("tasks")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
+  const { error } = await supabase.from("tasks").delete().eq("id", id);
 
   if (error) return { error: error.message };
   revalidateTaskScreens();
@@ -308,22 +325,18 @@ export async function rescheduleTask(
     .from("tasks")
     .select("title, notes, life_area, priority, due_time")
     .eq("id", id)
-    .eq("user_id", user.id)
     .single();
   if (!task) return { error: "Task tidak ditemukan." };
 
   const due_date = format(addDays(new Date(), dayOffset), DATE_FMT);
-  // Tanggal ikut di teks embedding, jadi re-embed saat dijadwalkan ulang
-  // (pola updateTransaction fina-app).
-  const embedding = await generateTaskEmbedding({ ...task, due_date });
-
   const { error } = await supabase
     .from("tasks")
-    .update({ due_date, ...(embedding ? { embedding } : {}) })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .update({ due_date })
+    .eq("id", id);
 
   if (error) return { error: error.message };
+  // Tanggal ikut di teks embedding → re-embed di latar belakang.
+  embedTaskInBackground(id, { ...task, due_date });
   revalidateTaskScreens();
   return {};
 }
