@@ -1,5 +1,6 @@
 import { ENVIRONMENT } from "@/config/environment";
 import {
+  baseUrlFromRequest,
   googleRedirectUri,
   pullGoogleCalendarEvents,
 } from "@/features/google/calendar";
@@ -8,23 +9,22 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 
-const PROFILE = `/profile`;
-
 /** Callback OAuth Google: tukar code → token, simpan, kembali ke Profil. */
 export async function GET(request: NextRequest) {
+  const base = baseUrlFromRequest(request);
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const cookieState = request.cookies.get("g_oauth_state")?.value;
 
   const back = (status: string) =>
-    NextResponse.redirect(`${ENVIRONMENT.appUrl}${PROFILE}?gcal=${status}`);
+    NextResponse.redirect(`${base}/profile?gcal=${status}`);
 
   if (url.searchParams.get("error")) return back("denied");
   if (!code || !state || state !== cookieState) return back("error");
 
   const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(`${ENVIRONMENT.appUrl}/login`);
+  if (!user) return NextResponse.redirect(`${base}/login`);
 
   // Tukar authorization code dengan token.
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       client_id: ENVIRONMENT.googleClientId!,
       client_secret: ENVIRONMENT.googleClientSecret!,
       code,
-      redirect_uri: googleRedirectUri(),
+      redirect_uri: googleRedirectUri(base),
       grant_type: "authorization_code",
     }),
   });

@@ -8,8 +8,20 @@ const CAL_BASE = "https://www.googleapis.com/calendar/v3/calendars";
 
 export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 
-export function googleRedirectUri(): string {
-  return `${ENVIRONMENT.appUrl}/api/google/callback`;
+/**
+ * Base URL dari request yang masuk (host asli di balik proxy Vercel), supaya
+ * redirect OAuth benar di produksi TANPA perlu set NEXT_PUBLIC_APP_URL.
+ * Fallback ke ENVIRONMENT.appUrl (localhost saat dev).
+ */
+export function baseUrlFromRequest(req: Request): string {
+  const h = req.headers;
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return host ? `${proto}://${host}` : ENVIRONMENT.appUrl;
+}
+
+export function googleRedirectUri(baseUrl?: string): string {
+  return `${baseUrl ?? ENVIRONMENT.appUrl}/api/google/callback`;
 }
 
 type Link = {

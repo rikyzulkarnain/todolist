@@ -1,20 +1,24 @@
 import { ENVIRONMENT } from "@/config/environment";
-import { GOOGLE_SCOPE, googleRedirectUri } from "@/features/google/calendar";
+import {
+  baseUrlFromRequest,
+  GOOGLE_SCOPE,
+  googleRedirectUri,
+} from "@/features/google/calendar";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { NextResponse } from "next/server";
 
 /** Mulai OAuth Google Calendar: redirect ke consent screen. */
-export async function GET() {
+export async function GET(request: Request) {
+  const base = baseUrlFromRequest(request);
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.redirect(`${ENVIRONMENT.appUrl}/login`);
+  if (!user) return NextResponse.redirect(`${base}/login`);
   if (!ENVIRONMENT.googleClientId)
-    return NextResponse.redirect(`${ENVIRONMENT.appUrl}/profile?gcal=unconfigured`);
+    return NextResponse.redirect(`${base}/profile?gcal=unconfigured`);
 
   const state = crypto.randomUUID();
   const params = new URLSearchParams({
     client_id: ENVIRONMENT.googleClientId,
-    redirect_uri: googleRedirectUri(),
+    redirect_uri: googleRedirectUri(base),
     response_type: "code",
     scope: GOOGLE_SCOPE,
     access_type: "offline",
@@ -29,7 +33,7 @@ export async function GET() {
   res.cookies.set("g_oauth_state", state, {
     httpOnly: true,
     sameSite: "lax",
-    secure: true,
+    secure: base.startsWith("https"),
     maxAge: 600,
     path: "/",
   });
