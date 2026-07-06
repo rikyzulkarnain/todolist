@@ -8,8 +8,13 @@ Bot Telegram dua arah: buat task dari chat, lihat task hari ini, dan (lewat
 | Kirim ke bot | Hasil |
 |---|---|
 | deep link `t.me/<bot>?start=<token>` | Menautkan chat ke akun app |
-| teks biasa | Membuat task baru (judul = teks) untuk hari ini |
+| teks biasa | Membuat task — **tanggal & jam otomatis dipahami AI** (mis. "Rapat besok jam 2 siang", "Olahraga senin 06:30", "Bayar listrik tanggal 25") |
 | `/today` atau `/hari` | Menampilkan daftar task hari ini |
+| `/help` | Bantuan / daftar kemampuan |
+
+> Parsing tanggal/jam memakai Gemini. Set secret `GEMINI_API_KEY` (atau
+> `GOOGLE_GEN_AI_API_KEY`) — tanpa itu, teks dipakai apa adanya sebagai judul
+> dengan tanggal hari ini.
 
 Reminder task (jenis Notifikasi/Alarm) juga dikirim ke Telegram bila akun
 tertaut — lihat `../send-reminders`.
@@ -23,6 +28,7 @@ tertaut — lihat `../send-reminders`.
 supabase secrets set \
   TELEGRAM_BOT_TOKEN="<token dari @BotFather>" \
   APP_TZ="Asia/Jakarta" \
+  GEMINI_API_KEY="<GOOGLE_GEN_AI_API_KEY-mu>" \
   TELEGRAM_WEBHOOK_SECRET="<string acak, opsional>"
 
 supabase functions deploy telegram-webhook --no-verify-jwt

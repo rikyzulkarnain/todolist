@@ -17,11 +17,76 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const APP_TZ = Deno.env.get("APP_TZ") ?? "Asia/Jakarta";
 const WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+// API key Gemini untuk memahami tanggal & jam dari kalimat bebas.
+const GEMINI_KEY =
+  Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("GOOGLE_GEN_AI_API_KEY");
+const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.5-flash-lite",
+];
 
 function todayInTz(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(
     new Date(),
   );
+}
+
+type ParsedTask = { title: string; due_date: string; due_time: string | null };
+
+/**
+ * Pahami pesan bebas → {judul, tanggal, jam} lewat Gemini. Contoh yang dikenali:
+ * "rapat besok jam 2 siang", "olahraga senin 06:30", "bayar listrik tgl 25".
+ * Fallback: judul = teks, tanggal = hari ini, tanpa jam.
+ */
+async function parseTask(text: string, today: string): Promise<ParsedTask> {
+  const fallback: ParsedTask = {
+    title: text.slice(0, 200),
+    due_date: today,
+    due_time: null,
+  };
+  if (!GEMINI_KEY) return fallback;
+
+  const prompt = `Ekstrak pesan pengguna menjadi SATU task. Balas HANYA JSON valid: {"title": string, "due_date": "yyyy-MM-dd", "due_time": "HH:mm" atau null}.
+Aturan:
+- Hari ini ${today} (zona ${APP_TZ}). Pahami "hari ini", "besok" (+1 hari), "lusa" (+2), nama hari (senin..minggu → kejadian terdekat ke depan), dan tanggal eksplisit ("tanggal 25", "25/12").
+- Jika tidak ada tanggal, pakai hari ini.
+- due_time 24 jam "HH:mm". "jam 2 siang"=14:00, "jam 8 pagi"=08:00, "setengah 8 malam"=19:30. Jika tidak ada waktu, null.
+- title ringkas dalam Bahasa Indonesia, TANPA keterangan waktu/tanggal.
+Pesan: "${text.replace(/"/g, "'")}"`;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0,
+              responseMimeType: "application/json",
+            },
+          }),
+        },
+      );
+      if (!res.ok) continue;
+      const json = await res.json();
+      const out = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!out) continue;
+      const p = JSON.parse(out);
+      const title = String(p.title ?? text).trim().slice(0, 200) || fallback.title;
+      const due_date = /^\d{4}-\d{2}-\d{2}$/.test(p.due_date)
+        ? p.due_date
+        : today;
+      const due_time = /^\d{2}:\d{2}$/.test(p.due_time) ? p.due_time : null;
+      return { title, due_date, due_time };
+    } catch {
+      continue;
+    }
+  }
+  return fallback;
 }
 
 async function sendMessage(chatId: number, text: string) {
@@ -116,6 +181,26 @@ Deno.serve(async (req) => {
   }
   const userId = link.user_id as string;
 
+  // /help → daftar kemampuan bot.
+  if (text === "/help" || text === "/bantuan") {
+    await sendMessage(
+      chatId,
+      [
+        "🤖 <b>Yang bisa kamu lakukan:</b>",
+        "",
+        "• Kirim kalimat biasa untuk membuat task — <b>tanggal & jam otomatis dikenali</b>.",
+        "   contoh: <i>Rapat tim besok jam 2 siang</i>",
+        "   contoh: <i>Olahraga senin 06:30</i>",
+        "   contoh: <i>Bayar listrik tanggal 25</i>",
+        "• /today — lihat task hari ini",
+        "• /help — bantuan ini",
+        "",
+        "Task yang kamu buat langsung muncul di aplikasi & kamu diingatkan tepat waktu.",
+      ].join("\n"),
+    );
+    return new Response("ok");
+  }
+
   // /today | /hari → daftar task hari ini.
   if (text === "/today" || text === "/hari") {
     const today = todayInTz();
@@ -141,20 +226,28 @@ Deno.serve(async (req) => {
     return new Response("ok");
   }
 
-  // Teks biasa → buat task baru untuk hari ini.
+  // Teks biasa → pahami tanggal/jam via AI, lalu buat task.
+  const today = todayInTz();
+  const parsed = await parseTask(text, today);
   const { error } = await supabase.from("tasks").insert({
     user_id: userId,
-    title: text.slice(0, 200),
+    title: parsed.title,
     life_area: "Pribadi",
     priority: "sedang",
-    due_date: todayInTz(),
+    due_date: parsed.due_date,
+    due_time: parsed.due_time,
     source: "manual",
-    reminder: "none",
+    // Ada jam → ingatkan; task juga muncul di app & Google Calendar (bila aktif).
+    reminder: parsed.due_time ? "push" : "none",
   });
   if (error) {
     await sendMessage(chatId, "⚠️ Gagal menyimpan task. Coba lagi.");
     return new Response("ok");
   }
-  await sendMessage(chatId, `✅ Dicatat: <b>${text}</b>`);
+  const when = parsed.due_date === today ? "hari ini" : parsed.due_date;
+  await sendMessage(
+    chatId,
+    `✅ Dicatat: <b>${parsed.title}</b>\n🗓️ ${when}${parsed.due_time ? " · " + parsed.due_time : ""}`,
+  );
   return new Response("ok");
 });
