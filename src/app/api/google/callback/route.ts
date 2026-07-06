@@ -1,8 +1,12 @@
 import { ENVIRONMENT } from "@/config/environment";
-import { googleRedirectUri } from "@/features/google/calendar";
+import {
+  googleRedirectUri,
+  pullGoogleCalendarEvents,
+} from "@/features/google/calendar";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/service";
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 
 const PROFILE = `/profile`;
 
@@ -57,6 +61,9 @@ export async function GET(request: NextRequest) {
     { onConflict: "user_id" },
   );
   if (error) return back("error");
+
+  // Impor event yang sudah ada di Google Calendar ke app (arah Google → app).
+  after(() => pullGoogleCalendarEvents(user.id));
 
   const res = back("connected");
   res.cookies.delete("g_oauth_state");

@@ -165,3 +165,97 @@ export async function removeTaskFromGoogleCalendar(
     headers: { Authorization: `Bearer ${auth.token}` },
   });
 }
+
+type GCalEvent = {
+  id?: string;
+  status?: string;
+  summary?: string;
+  start?: { date?: string; dateTime?: string };
+};
+
+/**
+ * Arah sebaliknya (Google Calendar → app): ambil event ~1 bulan ke depan lalu
+ * buat/perbarui task dengan pemetaan gcal_event_id (tanpa duplikat). Event yang
+ * berasal dari app juga cocok lewat gcal_event_id sehingga tidak dobel.
+ */
+export async function pullGoogleCalendarEvents(
+  userId: string,
+): Promise<{ imported: number; updated: number }> {
+  const auth = await getValidAccessToken(userId);
+  if (!auth) return { imported: 0, updated: 0 };
+  const supabase = createServiceClient();
+
+  const now = Date.now();
+  const params = new URLSearchParams({
+    timeMin: new Date(now - 86_400_000).toISOString(),
+    timeMax: new Date(now + 30 * 86_400_000).toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "100",
+  });
+  const cal = encodeURIComponent(auth.calendarId);
+  const res = await fetch(`${CAL_BASE}/${cal}/events?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${auth.token}` },
+  });
+  if (!res.ok) return { imported: 0, updated: 0 };
+  const data = (await res.json()) as { items?: GCalEvent[] };
+
+  let imported = 0;
+  let updated = 0;
+  for (const ev of data.items ?? []) {
+    if (!ev.id || ev.status === "cancelled") continue;
+    const summary = (ev.summary ?? "").trim();
+    if (!summary) continue;
+
+    let due_date: string | null = null;
+    let due_time: string | null = null;
+    if (ev.start?.date) due_date = ev.start.date;
+    else if (ev.start?.dateTime) {
+      due_date = ev.start.dateTime.slice(0, 10);
+      due_time = ev.start.dateTime.slice(11, 16);
+    }
+    if (!due_date) continue;
+
+    const { data: existing } = await supabase
+      .from("tasks")
+      .select("id, title, due_date, due_time")
+      .eq("user_id", userId)
+      .eq("gcal_event_id", ev.id)
+      .maybeSingle<{
+        id: string;
+        title: string;
+        due_date: string | null;
+        due_time: string | null;
+      }>();
+
+    if (existing) {
+      if (
+        existing.title !== summary ||
+        existing.due_date !== due_date ||
+        existing.due_time !== due_time
+      ) {
+        await supabase
+          .from("tasks")
+          .update({ title: summary, due_date, due_time })
+          .eq("id", existing.id);
+        updated++;
+      }
+      continue;
+    }
+
+    await supabase.from("tasks").insert({
+      user_id: userId,
+      title: summary,
+      life_area: "Pribadi",
+      priority: "sedang",
+      due_date,
+      due_time,
+      gcal_event_id: ev.id,
+      source: "manual",
+      reminder: due_time ? "push" : "none",
+    });
+    imported++;
+  }
+
+  return { imported, updated };
+}

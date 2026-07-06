@@ -5,6 +5,7 @@ import {
   disconnectGoogle,
   getGoogleStatus,
   GoogleStatus,
+  syncGoogleNow,
 } from "@/features/google/action";
 import { QuotaInfo } from "@/features/profile/action";
 import {
@@ -21,6 +22,7 @@ import {
 import { subscribeToPush } from "@/lib/push";
 import { cn } from "@/lib/utils";
 import { Profile } from "@/types/profile";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -34,6 +36,7 @@ export default function ProfileView({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(
     "default",
@@ -58,8 +61,13 @@ export default function ProfileView({
     const g = searchParams.get("gcal");
     if (!g) return;
     if (g === "connected") {
-      toast.success("Google Calendar terhubung");
+      toast.success("Google Calendar terhubung — mengimpor event…");
       getGoogleStatus().then(setGoogle);
+      // Impor event berjalan di server (after); segarkan task sebentar kemudian.
+      setTimeout(
+        () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        3000,
+      );
     } else if (g === "norefresh")
       toast.error("Coba lagi & pilih 'izinkan' — token refresh tidak diterima.");
     else if (g === "unconfigured")
@@ -101,6 +109,23 @@ export default function ProfileView({
       await disconnectGoogle();
       setGoogle((g) => (g ? { ...g, connected: false } : g));
       toast.success("Google Calendar diputus");
+    } finally {
+      setIntgBusy(false);
+    }
+  }
+
+  async function syncGoogleCal() {
+    setIntgBusy(true);
+    try {
+      const res = await syncGoogleNow();
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success(
+        `Sinkron selesai — ${res.imported} baru, ${res.updated} diperbarui`,
+      );
     } finally {
       setIntgBusy(false);
     }
@@ -274,13 +299,22 @@ export default function ProfileView({
             </div>
           </div>
           {google?.connected ? (
-            <button
-              onClick={disconnectGoogleCal}
-              disabled={intgBusy}
-              className="text-danger border-danger-line h-9 flex-none rounded-[10px] border bg-white px-3.5 text-[12.5px] font-bold transition disabled:opacity-50"
-            >
-              Putus
-            </button>
+            <div className="flex flex-none gap-1.5">
+              <button
+                onClick={syncGoogleCal}
+                disabled={intgBusy}
+                className="bg-teal hover:bg-teal-deep h-9 rounded-[10px] px-3 text-[12.5px] font-bold text-white transition disabled:opacity-50"
+              >
+                {intgBusy ? "…" : "Sinkron"}
+              </button>
+              <button
+                onClick={disconnectGoogleCal}
+                disabled={intgBusy}
+                className="text-danger border-danger-line h-9 rounded-[10px] border bg-white px-3 text-[12.5px] font-bold transition disabled:opacity-50"
+              >
+                Putus
+              </button>
+            </div>
           ) : (
             <a
               href="/api/google/connect"

@@ -3,6 +3,8 @@
 import { ENVIRONMENT } from "@/config/environment";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/service";
+import { revalidatePath } from "next/cache";
+import { pullGoogleCalendarEvents } from "./calendar";
 
 export type GoogleStatus = { connected: boolean; configured: boolean };
 
@@ -22,6 +24,22 @@ export async function getGoogleStatus(): Promise<GoogleStatus> {
     .maybeSingle();
 
   return { connected: Boolean(data), configured };
+}
+
+/** Tarik event Google Calendar → task (arah Google → app). */
+export async function syncGoogleNow(): Promise<{
+  imported: number;
+  updated: number;
+  error?: string;
+}> {
+  const user = await getCurrentUser();
+  if (!user) return { imported: 0, updated: 0, error: "Sesi berakhir." };
+
+  const res = await pullGoogleCalendarEvents(user.id);
+  revalidatePath("/home");
+  revalidatePath("/tasks");
+  revalidatePath("/calendar");
+  return res;
 }
 
 export async function disconnectGoogle(): Promise<{ error?: string }> {

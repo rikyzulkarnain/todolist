@@ -53,10 +53,13 @@ Implementasi dari desain Claude Design (`design-dari-file-prd/`) dan
 - **Integrasi Telegram (v3)** — bot dua arah (`supabase/functions/telegram-webhook`):
   hubungkan akun dari Profil (deep link), buat task dari chat, `/today` untuk
   daftar hari ini, dan terima **reminder di Telegram**. Setup di README fungsi.
-- **Integrasi Google Calendar (v3)** — OAuth dari Profil; task **bertanggal**
-  tersinkron otomatis (buat/ubah/hapus event) ke kalender. Token disimpan di
-  tabel RLS default-deny (hanya server via service role). Butuh Client ID/Secret
-  di env + redirect URI `/api/google/callback` terdaftar di Google Cloud.
+- **Integrasi Google Calendar (v3)** — OAuth dari Profil; sinkron **dua arah**:
+  task bertanggal di app otomatis jadi event kalender (buat/ubah/hapus), dan
+  event Google Calendar diimpor jadi task (otomatis saat connect + tombol
+  **Sinkron**), dipetakan lewat `tasks.gcal_event_id` tanpa duplikat. Token
+  disimpan di tabel RLS default-deny (hanya server via service role). Butuh
+  Client ID/Secret di env + redirect URI `/api/google/callback` terdaftar di
+  Google Cloud.
 - **Asisten AI (Gemini)** — chat berbahasa Indonesia dengan *function calling*:
   - `propose_agenda` → kartu **"Agenda prioritasmu hari ini"** ("Saya bingung hari ini")
   - `create_task` / `complete_task` / `delete_task` dari teks, **suara**
