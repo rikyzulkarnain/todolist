@@ -218,7 +218,7 @@ export default function HomeView({
           </div>
           <div className="mt-3.5 flex gap-2.5">
             <button
-              onClick={openSheet}
+              onClick={() => openSheet()}
               className="bg-teal hover:bg-teal-deep h-11 rounded-xl px-[18px] text-[13.5px] font-bold text-white transition"
             >
               Buat task

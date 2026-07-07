@@ -203,7 +203,7 @@ export default function TasksView({ initialTasks }: { initialTasks: Task[] }) {
             Tambahkan tugas pertamamu — bisa juga lewat suara atau foto nanti.
           </div>
           <button
-            onClick={openSheet}
+            onClick={() => openSheet()}
             className="bg-teal hover:bg-teal-deep mt-3 h-11 rounded-xl px-5 text-[13.5px] font-bold text-white transition"
           >
             Tambah tugas

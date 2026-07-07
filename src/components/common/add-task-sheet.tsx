@@ -16,13 +16,34 @@ import { useSheetStore } from "@/stores/sheet-store";
 import { LifeArea, Priority, ReminderType } from "@/types/task";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-const DAY_OPTIONS: { value: number; name: string }[] = [
-  { value: 0, name: "Hari ini" },
-  { value: 1, name: "Besok" },
-  { value: 3, name: "Minggu ini" },
+// Tanggal/jam dihitung di sisi KLIEN (zona user), bukan server (UTC di Vercel),
+// supaya "hari ini" & tanggal terpilih akurat.
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+function dateStr(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function todayLocal() {
+  return dateStr(new Date());
+}
+function nowLocal() {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function plusDays(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return dateStr(d);
+}
+
+const DAY_OPTIONS: { offset: number; name: string }[] = [
+  { offset: 0, name: "Hari ini" },
+  { offset: 1, name: "Besok" },
+  { offset: 3, name: "Minggu ini" },
 ];
 
 // FAB tampil hanya di Home & Tasks (mengikuti prototype).
@@ -36,18 +57,27 @@ export default function AddTaskSheet() {
   const pathname = usePathname();
   const online = useOnline();
   const queryClient = useQueryClient();
-  const { open, openSheet, closeSheet } = useSheetStore();
+  const { open, presetDate, openSheet, closeSheet } = useSheetStore();
 
   const [title, setTitle] = useState("");
   const [area, setArea] = useState<LifeArea>("Karier");
   const [priority, setPriority] = useState<Priority>("sedang");
-  const [dayOffset, setDayOffset] = useState(0);
+  const [dueDate, setDueDate] = useState(todayLocal());
   const [time, setTime] = useState("");
   const [reminder, setReminder] = useState<ReminderType>("push");
   const [busy, setBusy] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [dragY, setDragY] = useState(0);
   const dragStart = useRef<number | null>(null);
+
+  // Saat sheet dibuka: tanggal = tanggal terpilih (dari Kalender) atau hari ini,
+  // dan jam default = jam sekarang.
+  useEffect(() => {
+    if (open) {
+      setDueDate(presetDate ?? todayLocal());
+      setTime(nowLocal());
+    }
+  }, [open, presetDate]);
 
   const { recording, toggle: toggleVoice } = useAudioRecorder({
     onRecorded: async (audio) => {
@@ -91,7 +121,8 @@ export default function AddTaskSheet() {
         title: clean,
         lifeArea: area,
         priority,
-        dayOffset,
+        dayOffset: 0,
+        dueDate: dueDate || todayLocal(),
         time: time || undefined,
         reminder: time ? reminder : "none",
       });
@@ -104,7 +135,6 @@ export default function AddTaskSheet() {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       closeSheet();
       setTitle("");
-      setTime("");
       toast.success("Tugas ditambahkan");
     } finally {
       setBusy(false);
@@ -115,7 +145,7 @@ export default function AddTaskSheet() {
     <>
       {showFab && (
         <button
-          onClick={openSheet}
+          onClick={() => openSheet()}
           aria-label="Tambah tugas"
           className="bg-teal hover:bg-teal-deep absolute right-[18px] bottom-[86px] z-20 flex h-[54px] w-[54px] items-center justify-center rounded-[18px] shadow-[0_10px_24px_rgba(15,118,110,.4)] transition active:scale-[.94]"
         >
@@ -279,13 +309,20 @@ export default function AddTaskSheet() {
             <div className="text-slate mt-4 mb-2 text-[11.5px] font-extrabold tracking-[.5px] uppercase">
               Jatuh tempo
             </div>
-            <div className="flex gap-[7px]">
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="border-line-2 bg-soft text-ink-2 focus:border-teal h-10 w-full rounded-[12px] border-[1.5px] px-3.5 text-[13.5px] font-semibold outline-none focus:bg-white"
+            />
+            <div className="mt-2 flex gap-[7px]">
               {DAY_OPTIONS.map((d) => {
-                const sel = dayOffset === d.value;
+                const value = plusDays(d.offset);
+                const sel = dueDate === value;
                 return (
                   <button
-                    key={d.value}
-                    onClick={() => setDayOffset(d.value)}
+                    key={d.offset}
+                    onClick={() => setDueDate(value)}
                     className={cn(
                       "h-8 rounded-2xl border-[1.5px] px-3 text-xs font-bold transition-all duration-100",
                       sel

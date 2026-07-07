@@ -2,7 +2,12 @@
 
 import {
   ASSISTANT_GREETING,
+  ASSISTANT_MODELS,
+  AssistantModel,
+  DEFAULT_ASSISTANT_MODEL,
   FREE_DAILY_QUOTA,
+  MODEL_LABELS,
+  supportsThinking,
   SUGGESTED_CHIPS,
 } from "@/constants/assistant-constant";
 import { AssistantInit, saveTurn } from "@/features/assistant/action";
@@ -46,6 +51,9 @@ export default function AssistantView({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [quotaUsed, setQuotaUsed] = useState(initialQuota.used);
+  const [model, setModel] = useState<AssistantModel>(DEFAULT_ASSISTANT_MODEL);
+  const [thinking, setThinking] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const autoSent = useRef(false);
@@ -60,6 +68,20 @@ export default function AssistantView({
       behavior: "smooth",
     });
   }, [messages, busy]);
+
+  // Ingat pilihan model & thinking antar sesi.
+  useEffect(() => {
+    const m = localStorage.getItem("aios-ai-model");
+    if (m && (ASSISTANT_MODELS as readonly string[]).includes(m))
+      setModel(m as AssistantModel);
+    setThinking(localStorage.getItem("aios-ai-thinking") === "1");
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("aios-ai-model", model);
+  }, [model]);
+  useEffect(() => {
+    localStorage.setItem("aios-ai-thinking", thinking ? "1" : "0");
+  }, [thinking]);
 
   // Tombol "Saya bingung hari ini" di Home mengarah ke /ai?q=... — kirim otomatis.
   useEffect(() => {
@@ -95,6 +117,8 @@ export default function AssistantView({
         text: payload.text,
         audio: payload.audio,
         image: payload.image,
+        model,
+        thinking,
       });
 
       if (res.error) {
@@ -112,6 +136,7 @@ export default function AssistantView({
         role: "model",
         text: res.reply ?? "",
         agenda: res.agenda,
+        thought: res.thought,
       };
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -181,11 +206,106 @@ export default function AssistantView({
           <div>
             <div className="text-ink text-base font-extrabold">Asisten AI</div>
             <div className="text-mute text-[11px] font-semibold">
-              {quotaUsed}/{FREE_DAILY_QUOTA} kuota harian gratis
+              {MODEL_LABELS[model]} · {quotaUsed}/{FREE_DAILY_QUOTA} kuota
             </div>
           </div>
         </div>
+        <button
+          onClick={() => setShowSettings((v) => !v)}
+          aria-label="Pengaturan AI"
+          className={cn(
+            "flex h-9 w-9 items-center justify-center rounded-xl border-[1.5px] transition",
+            showSettings
+              ? "border-teal bg-mint-2 text-teal"
+              : "border-line-2 text-slate hover:bg-mint-3 bg-white",
+          )}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+          </svg>
+        </button>
       </div>
+
+      {/* pengaturan: pilih model + mode berpikir */}
+      {showSettings && (
+        <div className="anim-slide-down border-line mx-5 mb-2 flex flex-col gap-3 rounded-2xl border bg-white p-3.5">
+          <div>
+            <div className="text-slate mb-1.5 text-[11px] font-extrabold tracking-[.5px] uppercase">
+              Model AI
+            </div>
+            <div className="relative">
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value as AssistantModel)}
+                className="border-line-2 bg-soft text-ink-2 focus:border-teal h-10 w-full appearance-none rounded-xl border-[1.5px] px-3 pr-9 text-[13px] font-semibold outline-none focus:bg-white"
+              >
+                {ASSISTANT_MODELS.map((m) => (
+                  <option key={m} value={m}>
+                    {MODEL_LABELS[m]}
+                  </option>
+                ))}
+              </select>
+              <svg
+                className="text-mute pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </div>
+            <div className="text-mute-2 mt-1 text-[10.5px]">
+              Ganti model bila kuota model tertentu habis.
+            </div>
+          </div>
+          <button
+            onClick={() => setThinking((v) => !v)}
+            disabled={!supportsThinking(model)}
+            className="flex items-center justify-between disabled:opacity-50"
+          >
+            <div className="text-left">
+              <div className="text-ink-2 text-[13px] font-bold">
+                Mode berpikir 💭
+              </div>
+              <div className="text-mute-2 text-[10.5px]">
+                {supportsThinking(model)
+                  ? "Tampilkan alur berpikir model (bisa di-minimize)"
+                  : "Tidak didukung model ini"}
+              </div>
+            </div>
+            <span
+              className={cn(
+                "relative h-6 w-11 flex-none rounded-full transition",
+                thinking && supportsThinking(model)
+                  ? "bg-teal"
+                  : "bg-line-3",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
+                  thinking && supportsThinking(model) ? "left-[22px]" : "left-0.5",
+                )}
+              />
+            </span>
+          </button>
+        </div>
+      )}
 
       {!online ? (
         /* offline state */
@@ -232,6 +352,7 @@ export default function AssistantView({
                     isUser ? "items-end" : "items-start",
                   )}
                 >
+                  {!isUser && m.thought && <ThoughtBlock text={m.thought} />}
                   {m.text && (
                     <div
                       className={cn(
@@ -419,6 +540,40 @@ export default function AssistantView({
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/** Blok alur berpikir model — bisa dibuka/tutup (default tertutup). */
+function ThoughtBlock({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-1.5 w-full max-w-[82%]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-mute hover:text-slate flex items-center gap-1.5 text-[11.5px] font-bold transition"
+      >
+        <span>💭</span>
+        Proses berpikir
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={cn("transition-transform", open && "rotate-90")}
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="border-line-2 text-mute mt-1.5 rounded-xl border bg-[#FBFCFC] px-3 py-2.5 text-[12px] leading-[1.55] whitespace-pre-wrap">
+          {text}
+        </div>
       )}
     </div>
   );

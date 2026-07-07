@@ -11,7 +11,6 @@ import {
 import { QuotaInfo } from "@/features/profile/action";
 import {
   createTelegramLink,
-  getTelegramStatus,
   TelegramStatus,
   unlinkTelegram,
 } from "@/features/telegram/action";
@@ -31,9 +30,13 @@ import { toast } from "sonner";
 export default function ProfileView({
   profile,
   quota,
+  initialTelegram,
+  initialGoogle,
 }: {
   profile: Profile;
   quota: QuotaInfo;
+  initialTelegram: TelegramStatus;
+  initialGoogle: GoogleStatus;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -42,8 +45,8 @@ export default function ProfileView({
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(
     "default",
   );
-  const [tg, setTg] = useState<TelegramStatus | null>(null);
-  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [tg, setTg] = useState<TelegramStatus | null>(initialTelegram);
+  const [google, setGoogle] = useState<GoogleStatus | null>(initialGoogle);
   const [intgBusy, setIntgBusy] = useState(false);
 
   const name = profile.name ?? "Pengguna";
@@ -51,10 +54,10 @@ export default function ProfileView({
   const quotaPct = Math.min(100, Math.round((quota.used / quota.limit) * 100));
 
   useEffect(() => {
+    // Status Telegram/Google sudah dari server (SSR) — hanya izin notifikasi
+    // & service worker yang harus dicek di klien.
     setPerm(permissionState());
     registerServiceWorker();
-    getTelegramStatus().then(setTg);
-    getGoogleStatus().then(setGoogle);
   }, []);
 
   // Umpan balik setelah kembali dari OAuth Google (?gcal=...).

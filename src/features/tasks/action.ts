@@ -95,6 +95,8 @@ export type AddTaskInput = {
   priority: Priority;
   /** 0 = hari ini, 1 = besok, 3 = minggu ini (mengikuti opsi di bottom sheet). */
   dayOffset: number;
+  /** Tanggal eksplisit "yyyy-MM-dd" (dari klien, zona user) — menimpa dayOffset. */
+  dueDate?: string | null;
   time?: string;
   source?: Task["source"];
   repeatRule?: RepeatRule | null;
@@ -111,7 +113,8 @@ export async function addTask(
   const title = input.title.trim();
   if (!title) return { error: "Tulis judul tugas dulu" };
 
-  const due_date = format(addDays(new Date(), input.dayOffset), DATE_FMT);
+  const due_date =
+    input.dueDate ?? format(addDays(new Date(), input.dayOffset), DATE_FMT);
   const due_time = input.time || null;
 
   const { data, error } = await supabase

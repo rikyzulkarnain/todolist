@@ -12,6 +12,8 @@ export type AssistantMessage = {
   role: "user" | "model";
   text: string;
   agenda?: AgendaItem[];
+  /** Alur berpikir model (bila mode thinking aktif) — dapat di-minimize di UI. */
+  thought?: string;
 };
 
 export type ChatMessageRow = {

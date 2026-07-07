@@ -164,7 +164,10 @@ export default function CalendarView({
             {selected.tasks.length} task
           </div>
           {selected.tasks.length === 0 ? (
-            <EmptyDay onAdd={openSheet} label="Tidak ada task di hari ini" />
+            <EmptyDay
+              onAdd={() => openSheet(selected.key)}
+              label="Tidak ada task di hari ini"
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {selected.tasks.map((t) => {
@@ -252,7 +255,10 @@ export default function CalendarView({
               </div>
             ))}
           {days.every((d) => !d.tasks.length) && (
-            <EmptyDay onAdd={openSheet} label="Tidak ada task minggu ini" />
+            <EmptyDay
+              onAdd={() => openSheet()}
+              label="Tidak ada task minggu ini"
+            />
           )}
         </div>
       )}
@@ -366,7 +372,10 @@ export default function CalendarView({
             {selDateTasks.length} task
           </div>
           {selDateTasks.length === 0 ? (
-            <EmptyDay onAdd={openSheet} label="Tidak ada task di tanggal ini" />
+            <EmptyDay
+              onAdd={() => openSheet(selDate)}
+              label="Tidak ada task di tanggal ini"
+            />
           ) : (
             <div className="flex flex-col gap-1.5">
               {selDateTasks.map((t) => {

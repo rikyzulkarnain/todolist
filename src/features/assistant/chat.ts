@@ -7,6 +7,7 @@ import {
   DEFAULT_ASSISTANT_MODEL,
   FREE_DAILY_QUOTA,
   QUOTA_EXCEEDED_MESSAGE,
+  supportsThinking,
 } from "@/constants/assistant-constant";
 import {
   findEmbedding,
@@ -39,6 +40,8 @@ export type AssistantChatResult = {
   changed?: boolean;
   /** Transkrip teks dari input suara (untuk ditampilkan sebagai pesan user). */
   transcript?: string;
+  /** Alur berpikir model (bila mode thinking aktif). */
+  thought?: string;
   quotaUsed?: number;
 };
 
@@ -168,6 +171,7 @@ async function callModel(
   contents: Content[],
   systemInstruction: string,
   preferred: AssistantModel,
+  thinking: boolean,
 ): Promise<GenerateContentResponse> {
   const ai = createAI();
   let lastError: unknown;
@@ -185,6 +189,15 @@ async function callModel(
           temperature: 0.4,
           systemInstruction,
           tools: [{ functionDeclarations: DECLARATIONS }],
+          // Thinking hanya untuk model yang mendukung; includeThoughts=true
+          // mengembalikan part beralur berpikir, thinkingBudget=0 mematikannya.
+          ...(supportsThinking(model)
+            ? {
+                thinkingConfig: thinking
+                  ? { includeThoughts: true }
+                  : { thinkingBudget: 0 },
+              }
+            : {}),
         },
       });
     } catch (error) {
@@ -317,6 +330,7 @@ export async function assistantChat(input: {
   audio?: { mimeType: string; base64: string };
   image?: { mimeType: string; base64: string };
   model?: AssistantModel;
+  thinking?: boolean;
 }): Promise<AssistantChatResult> {
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -379,10 +393,16 @@ export async function assistantChat(input: {
     changed: false,
   };
   let reply = "";
+  let thought = "";
 
   try {
     for (let turn = 0; turn < 5; turn++) {
-      const response = await callModel(contents, systemInstruction, model);
+      const response = await callModel(
+        contents,
+        systemInstruction,
+        model,
+        input.thinking ?? false,
+      );
       const respParts = response.candidates?.[0]?.content?.parts ?? [];
       const functionCalls: FunctionCall[] = [];
       const modelParts: Part[] = [];
@@ -390,6 +410,7 @@ export async function assistantChat(input: {
       for (const part of respParts) {
         modelParts.push(part);
         if (part.functionCall) functionCalls.push(part.functionCall);
+        else if (part.thought && part.text) thought += part.text;
         else if (part.text) reply += part.text;
       }
 
@@ -436,6 +457,7 @@ export async function assistantChat(input: {
     agenda: collector.agenda ?? undefined,
     changed: collector.changed,
     transcript,
+    thought: thought.trim() || undefined,
     quotaUsed: quotaUsed + 1,
   };
 }
