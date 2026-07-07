@@ -171,9 +171,13 @@ async function geminiGenerate(
           }),
         },
       );
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.error(`Gemini ${model} HTTP ${res.status}: ${await res.text()}`);
+        continue;
+      }
       return await res.json();
-    } catch {
+    } catch (e) {
+      console.error(`Gemini ${model} error`, e);
       continue;
     }
   }
@@ -244,7 +248,12 @@ async function runAgent(
       )
       .join("\n") || "(belum ada task)";
 
-  const sys = `Kamu asisten Telegram untuk aplikasi "AI Life OS" (Bahasa Indonesia). Hari ini ${today} (zona ${APP_TZ}).
+  const dayName = new Intl.DateTimeFormat("id-ID", {
+    timeZone: APP_TZ,
+    weekday: "long",
+  }).format(new Date());
+
+  const sys = `Kamu asisten Telegram untuk aplikasi "AI Life OS" (Bahasa Indonesia). Hari & tanggal ini: ${dayName}, ${today} (zona ${APP_TZ}).
 
 Daftar task pengguna saat ini:
 ${taskLines}
@@ -252,17 +261,24 @@ ${taskLines}
 Aturan:
 - Pahami MAKSUD pesan: membuat, menyelesaikan, atau menghapus task.
 - Membuat: panggil create_task (day_offset 0=hari ini,1=besok; time "HH:mm" bila disebut).
+- RENTANG tanggal ("dari Rabu sampai Jumat", "Senin–Kamis", "3 hari ke depan") bersifat INKLUSIF: panggil create_task untuk SETIAP hari termasuk hari terakhir. Contoh: hari ini Selasa, "Rabu sampai Jumat" → 3 task (day_offset 1,2,3). Hitung day_offset dari nama hari di atas.
 - Menyelesaikan/menghapus: cari id paling cocok dari daftar lalu panggil complete_task / delete_task. JANGAN membuat task baru saat pengguna minta hapus/selesai.
 - Bisa memanggil beberapa fungsi sekaligus bila pengguna menyebut banyak hal.
 - Jika tidak ada task yang cocok untuk dihapus/diselesaikan, katakan dengan sopan (jangan buat baru).
 - Balas SINGKAT, hangat, Bahasa Indonesia (boleh 1 emoji). Jangan pernah menyebut id ke pengguna.`;
 
   const contents: Json[] = [{ role: "user", parts: [{ text }] }];
+  const acts = { created: 0, completed: 0, deleted: 0, failed: 0 };
   let reply = "";
+  let apiFailed = false;
 
   for (let turn = 0; turn < 5; turn++) {
     const resp = await geminiGenerate(sys, contents);
-    const parts: Json[] = resp?.candidates?.[0]?.content?.parts ?? [];
+    if (!resp) {
+      apiFailed = true;
+      break;
+    }
+    const parts: Json[] = resp.candidates?.[0]?.content?.parts ?? [];
     if (parts.length === 0) break;
 
     const calls = parts.filter((p: Json) => p.functionCall);
@@ -272,21 +288,38 @@ Aturan:
     contents.push({ role: "model", parts });
     const responseParts: Json[] = [];
     for (const c of calls) {
+      const name = c.functionCall.name;
       const result = await execFn(
         supabase,
         userId,
         today,
-        c.functionCall.name,
+        name,
         c.functionCall.args ?? {},
       );
+      if (!result.success) acts.failed++;
+      else if (name === "create_task") acts.created++;
+      else if (name === "complete_task") acts.completed++;
+      else if (name === "delete_task") acts.deleted++;
       responseParts.push({
-        functionResponse: { name: c.functionCall.name, response: { result } },
+        functionResponse: { name, response: { result } },
       });
     }
     contents.push({ role: "user", parts: responseParts });
   }
 
-  return reply.trim() || "✅ Sudah kuproses.";
+  // Balasan jujur: kalau AI gagal total, katakan; kalau ada aksi, ringkas.
+  const total = acts.created + acts.completed + acts.deleted;
+  if (apiFailed && total === 0)
+    return "⚠️ Maaf, asistennya sedang bermasalah. Coba lagi sebentar ya. (Jika terus terjadi, cek secret GEMINI_API_KEY di Supabase.)";
+  if (reply.trim()) return reply.trim();
+  if (total > 0) {
+    const bits: string[] = [];
+    if (acts.created) bits.push(`➕ ${acts.created} dibuat`);
+    if (acts.completed) bits.push(`✅ ${acts.completed} selesai`);
+    if (acts.deleted) bits.push(`🗑️ ${acts.deleted} dihapus`);
+    return bits.join(" · ");
+  }
+  return "Hmm, aku belum menangkap maksudmu. Coba tulis lebih jelas ya 🙂";
 }
 
 Deno.serve(async (req) => {
