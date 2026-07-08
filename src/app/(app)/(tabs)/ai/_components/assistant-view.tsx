@@ -10,13 +10,20 @@ import {
   supportsThinking,
   SUGGESTED_CHIPS,
 } from "@/constants/assistant-constant";
-import { AssistantInit, saveTurn } from "@/features/assistant/action";
+import {
+  AssistantInit,
+  createConversation,
+  deleteConversation,
+  getConversationMessages,
+  getConversations,
+  saveTurn,
+} from "@/features/assistant/action";
 import { assistantChat } from "@/features/assistant/chat";
 import { QuotaInfo } from "@/features/profile/action";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { useOnline } from "@/hooks/use-online";
 import { cn } from "@/lib/utils";
-import { AssistantMessage } from "@/types/ai";
+import { AssistantMessage, ConversationSummary } from "@/types/ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -37,9 +44,11 @@ function fileToBase64(file: File): Promise<string> {
 
 export default function AssistantView({
   init,
+  initialConversations,
   initialQuota,
 }: {
   init: AssistantInit;
+  initialConversations: ConversationSummary[];
   initialQuota: QuotaInfo;
 }) {
   const router = useRouter();
@@ -54,6 +63,10 @@ export default function AssistantView({
   const [model, setModel] = useState<AssistantModel>(DEFAULT_ASSISTANT_MODEL);
   const [thinking, setThinking] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [conversationId, setConversationId] = useState(init.conversationId);
+  const [conversations, setConversations] =
+    useState<ConversationSummary[]>(initialConversations);
+  const [showHistory, setShowHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const autoSent = useRef(false);
@@ -147,7 +160,8 @@ export default function AssistantView({
       if (res.changed)
         queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
-      await saveTurn(init.conversationId, userText, modelMsg.text, res.agenda);
+      await saveTurn(conversationId, userText, modelMsg.text, res.agenda);
+      getConversations().then(setConversations);
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "Terjadi kesalahan pada asisten AI.",
@@ -180,6 +194,47 @@ export default function AssistantView({
     router.push("/home");
   }
 
+  async function onNewChat() {
+    if (busy) return;
+    const res = await createConversation();
+    if (!res) return;
+    setConversationId(res.conversationId);
+    setMessages([]);
+    setShowHistory(false);
+    autoSent.current = true; // cegah auto-kirim query lama
+    getConversations().then(setConversations);
+  }
+
+  async function onOpenConversation(id: string) {
+    if (busy || id === conversationId) {
+      setShowHistory(false);
+      return;
+    }
+    const msgs = await getConversationMessages(id);
+    setConversationId(id);
+    setMessages(msgs);
+    setShowHistory(false);
+  }
+
+  async function onDeleteConversation(id: string) {
+    const res = await deleteConversation(id);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    const next = conversations.filter((c) => c.id !== id);
+    setConversations(next);
+    // Kalau yang dihapus adalah chat aktif, pindah ke chat lain / buat baru.
+    if (id === conversationId) {
+      if (next.length > 0) {
+        await onOpenConversation(next[0].id);
+      } else {
+        await onNewChat();
+      }
+    }
+    toast.success("Chat dihapus");
+  }
+
   const shownMessages: AssistantMessage[] = messages.length
     ? messages
     : [{ role: "model", text: ASSISTANT_GREETING }];
@@ -210,31 +265,182 @@ export default function AssistantView({
             </div>
           </div>
         </div>
-        <button
-          onClick={() => setShowSettings((v) => !v)}
-          aria-label="Pengaturan AI"
-          className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-xl border-[1.5px] transition",
-            showSettings
-              ? "border-teal bg-mint-2 text-teal"
-              : "border-line-2 text-slate hover:bg-mint-3 bg-white",
-          )}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onNewChat}
+            aria-label="Chat baru"
+            className="border-line-2 text-slate hover:bg-mint-3 flex h-9 w-9 items-center justify-center rounded-xl border-[1.5px] bg-white transition"
           >
-            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-          </svg>
-        </button>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowHistory(true)}
+            aria-label="Riwayat chat"
+            className="border-line-2 text-slate hover:bg-mint-3 flex h-9 w-9 items-center justify-center rounded-xl border-[1.5px] bg-white transition"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowSettings((v) => !v)}
+            aria-label="Pengaturan AI"
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-xl border-[1.5px] transition",
+              showSettings
+                ? "border-teal bg-mint-2 text-teal"
+                : "border-line-2 text-slate hover:bg-mint-3 bg-white",
+            )}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      {/* drawer riwayat chat */}
+      {showHistory && (
+        <>
+          <div
+            onClick={() => setShowHistory(false)}
+            className="absolute inset-0 z-50 bg-[rgba(9,40,37,.45)]"
+          />
+          <div className="anim-slide-right absolute top-0 right-0 bottom-0 z-[51] flex w-[82%] max-w-[340px] flex-col bg-white shadow-[-8px_0_24px_rgba(0,0,0,.12)]">
+            <div className="border-line flex items-center justify-between border-b px-4 py-3.5">
+              <div className="text-ink text-[15px] font-extrabold">
+                Riwayat chat
+              </div>
+              <button
+                onClick={() => setShowHistory(false)}
+                aria-label="Tutup"
+                className="text-slate flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[#F1F5F4]"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <button
+              onClick={onNewChat}
+              className="text-teal border-line-soft hover:bg-mint-3 flex items-center gap-2 border-b px-4 py-3 text-sm font-bold transition"
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Chat baru
+            </button>
+            <div className="flex-1 overflow-auto p-2">
+              {conversations.length === 0 ? (
+                <div className="text-mute-2 px-3 py-6 text-center text-[13px]">
+                  Belum ada riwayat.
+                </div>
+              ) : (
+                conversations.map((c) => {
+                  const active = c.id === conversationId;
+                  return (
+                    <div
+                      key={c.id}
+                      className={cn(
+                        "group mb-1 flex items-center gap-2 rounded-xl px-3 py-2.5 transition",
+                        active ? "bg-mint-2" : "hover:bg-soft",
+                      )}
+                    >
+                      <button
+                        onClick={() => onOpenConversation(c.id)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div
+                          className={cn(
+                            "truncate text-[13.5px] font-semibold",
+                            active ? "text-teal" : "text-ink-2",
+                          )}
+                        >
+                          {c.title?.trim() || "Chat baru"}
+                        </div>
+                        <div className="text-mute-2 text-[11px]">
+                          {new Date(c.created_at).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => onDeleteConversation(c.id)}
+                        aria-label="Hapus chat"
+                        className="text-mute-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg transition hover:bg-[#FEF2F2] hover:text-[#DC2626]"
+                      >
+                        <svg
+                          width="15"
+                          height="15"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* pengaturan: pilih model + mode berpikir */}
       {showSettings && (

@@ -132,6 +132,17 @@ body {
 .anim-alarm-pulse {
   animation: alarm-pulse 1.2s ease-in-out infinite;
 }
+@keyframes slide-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.anim-slide-right {
+  animation: slide-right 0.24s cubic-bezier(0.3, 1, 0.4, 1);
+}
 
 /* Markdown ringkas di bubble chat AI */
 .chat-md p {

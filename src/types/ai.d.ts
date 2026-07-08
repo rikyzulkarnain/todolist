@@ -16,6 +16,13 @@ export type AssistantMessage = {
   thought?: string;
 };
 
+/** Ringkasan percakapan untuk daftar riwayat chat. */
+export type ConversationSummary = {
+  id: string;
+  title: string | null;
+  created_at: string;
+};
+
 export type ChatMessageRow = {
   id: string;
   conversation_id: string;
