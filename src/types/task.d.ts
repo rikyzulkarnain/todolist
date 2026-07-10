@@ -47,6 +47,25 @@ export type Tag = {
   name: string;
 };
 
+// Satu entri log kegiatan pada sebuah task (dokumentasi apa yang sudah
+// dilakukan). Kolom mentah dari tabel task_logs.
+export type TaskLog = {
+  id: string;
+  task_id: string;
+  user_id: string;
+  note: string | null;
+  photo_path: string | null;
+  audio_path: string | null;
+  transcript: string | null;
+  created_at: string;
+};
+
+// TaskLog yang sudah dilengkapi signed URL (siap tampil di klien).
+export type TaskLogView = TaskLog & {
+  photoUrl: string | null;
+  audioUrl: string | null;
+};
+
 export type GoalStatus = "active" | "done" | "archived";
 
 export type Goal = {

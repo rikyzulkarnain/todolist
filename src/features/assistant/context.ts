@@ -12,8 +12,27 @@ export type AssistantContext = {
   tasks: Task[];
   /** Memori relevan (RAG) dengan pesan terkini pengguna — v2. */
   memories: string[];
+  /** Log kegiatan terbaru (apa yang sudah dilakukan) — referensi jadwal — v3.1. */
+  recentActivity: string[];
   today: string; // yyyy-MM-dd
 };
+
+// Baris log kegiatan + judul task terkait (join tasks). Supabase bisa
+// mengembalikan relasi to-one sebagai objek atau array — tangani keduanya.
+type ActivityRow = {
+  note: string | null;
+  transcript: string | null;
+  created_at: string;
+  tasks: { title: string } | { title: string }[] | null;
+};
+
+function formatActivity(row: ActivityRow): string {
+  const rel = Array.isArray(row.tasks) ? row.tasks[0] : row.tasks;
+  const title = rel?.title ?? "(task)";
+  const date = row.created_at.slice(0, 10);
+  const text = [row.note, row.transcript].filter(Boolean).join(" — ");
+  return `- ${date} · ${title}: ${text}`;
+}
 
 /**
  * Context bundle yang dirakit sebelum memanggil AI (PRD §6.1): profil (jam
@@ -33,6 +52,7 @@ export async function getAssistantContext(
     goals: [],
     tasks: [],
     memories: [],
+    recentActivity: [],
     today: emptyTz,
   };
   if (!user) return empty;
@@ -46,8 +66,13 @@ export async function getAssistantContext(
   const today = todayInTz(tz);
   const weekEnd = daysAgoInTz(-7, tz); // 7 hari ke depan
 
-  const [{ data: profile }, { data: goals }, { data: tasks }, memories] =
-    await Promise.all([
+  const [
+    { data: profile },
+    { data: goals },
+    { data: tasks },
+    memories,
+    { data: activity },
+  ] = await Promise.all([
       supabase
         .from("profiles")
         .select("name, productive_time")
@@ -66,6 +91,16 @@ export async function getAssistantContext(
         .returns<Task[]>(),
       // RAG: memori relevan dengan pesan terkini (kalau ada).
       query ? findMemories(query, 4) : Promise.resolve([]),
+      // Log kegiatan terbaru (dokumentasi apa yang sudah dilakukan) — referensi
+      // AI untuk menyusun langkah berikutnya. Ambil yang punya teks (note/transkrip).
+      supabase
+        .from("task_logs")
+        .select("note, transcript, created_at, tasks(title)")
+        .eq("user_id", user.id)
+        .or("note.not.is.null,transcript.not.is.null")
+        .order("created_at", { ascending: false })
+        .limit(8)
+        .returns<ActivityRow[]>(),
     ]);
 
   return {
@@ -74,6 +109,7 @@ export async function getAssistantContext(
     goals: (goals ?? []).map((g) => g.title),
     tasks: tasks ?? [],
     memories: memories.map((m) => m.content),
+    recentActivity: (activity ?? []).map(formatActivity),
     today,
   };
 }

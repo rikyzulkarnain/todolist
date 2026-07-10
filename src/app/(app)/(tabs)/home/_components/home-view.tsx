@@ -5,6 +5,7 @@ import { areaColor } from "@/constants/life-area-constant";
 import { PRIORITIES, priorityWeight } from "@/constants/priority-constant";
 import { getTasks, rescheduleTask, toggleTask } from "@/features/tasks/action";
 import { cn } from "@/lib/utils";
+import { useCompletionLogStore } from "@/stores/completion-log-store";
 import { useSheetStore } from "@/stores/sheet-store";
 import { Task } from "@/types/task";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +33,7 @@ export default function HomeView({
 }) {
   const queryClient = useQueryClient();
   const openSheet = useSheetStore((s) => s.openSheet);
+  const promptLog = useCompletionLogStore((s) => s.promptLog);
   const [reminderDismissed, setReminderDismissed] = useState(true);
 
   const { data: tasks = [] } = useQuery({
@@ -77,7 +79,8 @@ export default function HomeView({
 
   async function onToggle(id: string) {
     const current = queryClient.getQueryData<Task[]>(["tasks"]);
-    const willBeDone = current?.find((t) => t.id === id)?.status !== "done";
+    const target = current?.find((t) => t.id === id);
+    const willBeDone = target?.status !== "done";
     // Optimistik: centang langsung berubah, server menyusul.
     queryClient.setQueryData<Task[]>(["tasks"], (old) =>
       old?.map((t) =>
@@ -88,7 +91,10 @@ export default function HomeView({
     );
     const res = await toggleTask(id);
     if (res?.error) toast.error(res.error);
-    else if (willBeDone) toast.success("Task selesai 🎉");
+    else if (willBeDone && target) {
+      // Task selesai → tawarkan pop-up dokumentasi hasil (ketik/suara/foto + AI).
+      promptLog(target);
+    }
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 

@@ -5,6 +5,7 @@ import { LIFE_AREAS } from "@/constants/life-area-constant";
 import { PRIORITIES, PRIORITY_KEYS } from "@/constants/priority-constant";
 import { deleteTasks, getTasks, toggleTask } from "@/features/tasks/action";
 import { cn } from "@/lib/utils";
+import { useCompletionLogStore } from "@/stores/completion-log-store";
 import { useSheetStore } from "@/stores/sheet-store";
 import { LifeArea, Task } from "@/types/task";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ function dayOffset(t: Task): number {
 export default function TasksView({ initialTasks }: { initialTasks: Task[] }) {
   const queryClient = useQueryClient();
   const openSheet = useSheetStore((s) => s.openSheet);
+  const promptLog = useCompletionLogStore((s) => s.promptLog);
   const [groupBy, setGroupBy] = useState<GroupBy>("area");
 
   const [selectMode, setSelectMode] = useState(false);
@@ -42,8 +44,8 @@ export default function TasksView({ initialTasks }: { initialTasks: Task[] }) {
   // Toggle optimistik: status langsung berubah di layar, server menyusul.
   async function onToggle(id: string) {
     const current = queryClient.getQueryData<Task[]>(["tasks"]);
-    const willBeDone =
-      current?.find((t) => t.id === id)?.status !== "done";
+    const target = current?.find((t) => t.id === id);
+    const willBeDone = target?.status !== "done";
     queryClient.setQueryData<Task[]>(["tasks"], (old) =>
       old?.map((t) =>
         t.id === id
@@ -54,8 +56,9 @@ export default function TasksView({ initialTasks }: { initialTasks: Task[] }) {
     const res = await toggleTask(id);
     if (res?.error) {
       toast.error(res.error);
-    } else if (willBeDone) {
-      toast.success("Task selesai 🎉");
+    } else if (willBeDone && target) {
+      // Task selesai → pop-up dokumentasi hasil (ketik/suara/foto + AI).
+      promptLog(target);
     }
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }

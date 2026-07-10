@@ -18,6 +18,7 @@ import { getTags, setTaskTags } from "@/features/tags/action";
 import { ensureNotificationPermission } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { useTaskDetailStore } from "@/stores/task-detail-store";
+import TaskLogSection from "@/components/common/task-log-section";
 import {
   LifeArea,
   Priority,
@@ -558,6 +559,9 @@ export default function TaskDetailSheet() {
           rows={2}
           className="border-line-2 bg-soft text-ink-2 focus:border-teal w-full resize-none rounded-xl border-[1.5px] px-3 py-2.5 text-[13.5px] outline-none focus:bg-white"
         />
+
+        <SectionLabel>Log Kegiatan</SectionLabel>
+        <TaskLogSection taskId={task.id} />
 
         <div className="mt-5 flex gap-2.5">
           <button
