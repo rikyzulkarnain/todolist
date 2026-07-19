@@ -34,6 +34,9 @@ self.addEventListener("push", (event) => {
 });
 
 // Klik notifikasi → fokuskan tab app yang sudah ada, atau buka baru.
+// Untuk notifikasi 'alarm', URL berisi ?alarm=<id> agar tab yang dibuka
+// langsung memicu overlay alarm. Karena itu tab yang sudah ada pun
+// dinavigasikan ke URL tersebut sebelum difokuskan.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || "/home";
@@ -42,7 +45,13 @@ self.addEventListener("notificationclick", (event) => {
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clients) => {
         for (const client of clients) {
-          if ("focus" in client) return client.focus();
+          if ("focus" in client) {
+            const navigated =
+              "navigate" in client && url
+                ? Promise.resolve(client.navigate(url)).catch(() => client)
+                : Promise.resolve(client);
+            return navigated.then((c) => (c || client).focus());
+          }
         }
         if (self.clients.openWindow) return self.clients.openWindow(url);
       }),

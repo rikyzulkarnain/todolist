@@ -34,11 +34,38 @@ function firedKey(taskId: string, date: string): string {
 export default function ReminderScheduler() {
   const ring = useAlarmStore((s) => s.ring);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const handledAlarmParam = useRef(false);
 
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks"],
     queryFn: () => getTasks(),
   });
+
+  // Jembatan background→foreground: bila app dibuka dari notifikasi 'alarm'
+  // (URL `?alarm=<id>` dari service worker), langsung bunyikan alarm layar
+  // penuh untuk task tersebut. Menunggu daftar task termuat lalu bersihkan
+  // query agar tidak berdering lagi saat refresh.
+  useEffect(() => {
+    if (handledAlarmParam.current || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const alarmId = params.get("alarm");
+    if (!alarmId) return;
+
+    const target = tasks
+      .flatMap((t) => [t, ...(t.subtasks ?? [])])
+      .find((t) => t.id === alarmId);
+    if (!target) return; // daftar belum termuat — coba lagi saat data berubah
+
+    handledAlarmParam.current = true;
+    params.delete("alarm");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash,
+    );
+    if (target.status !== "done") ring(target);
+  }, [tasks, ring]);
 
   useEffect(() => {
     registerServiceWorker();

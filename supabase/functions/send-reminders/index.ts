@@ -94,7 +94,13 @@ Deno.serve(async () => {
       tag: `task-${task.id}`,
       requireInteraction: task.reminder === "alarm",
       icon: AREA_ICON,
-      data: { url: "/home" },
+      // Untuk 'alarm', arahkan klik notifikasi ke /home?alarm=<id> agar app
+      // yang terbuka langsung membunyikan alarm layar penuh (jembatan
+      // background→foreground; web tak bisa dering-loop saat app tertutup).
+      data: {
+        url:
+          task.reminder === "alarm" ? `/home?alarm=${task.id}` : "/home",
+      },
     });
 
     for (const sub of subs ?? []) {
